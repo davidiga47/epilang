@@ -111,7 +111,7 @@ pub fn parse_tokens(tokens: &mut Vec<Token>, function_stack: &mut Vec<FunctionSc
                 function_stack.push(FunctionScope {
                     input_vars: input_vars,
                     external_variables: Vec::new(),
-                    var_scope: 0,
+                    var_scope: input_var_names.len(),
                     variable_map: variable_map
                 });
                 stack.push(Token::Fn)
