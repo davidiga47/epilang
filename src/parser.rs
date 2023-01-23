@@ -97,12 +97,17 @@ pub fn parse_tokens(tokens: &mut Vec<Token>, function_stack: &mut Vec<FunctionSc
 
             Token::Let => {
                 // Declaring a variable increments the variable scope
-                handle_let_token(tokens, &mut stack, function_stack.last_mut().unwrap())?
+                handle_let_token(tokens, &mut stack, &mut out, function_stack.last_mut().unwrap())?
             },
 
             Token::Fn => {
+                // We parse `fn` as a let expression
+                handle_let_token(tokens, &mut stack, &mut out, function_stack.last_mut().unwrap())?;
+                // Here we insert `=` so that this is parsed like a declaration with assignment
+                handle_operator_token(Operator::Assign, &mut stack, &mut out)?;
+                // Create FunctionScope and push it to function_stack
                 let mut variable_map: HashMap<String, usize> = HashMap::new();
-                let input_var_names: Vec<String> = parse_function_def(tokens)?;
+                let input_var_names: Vec<String> = parse_input_vars(tokens)?;
                 let mut input_vars: Vec<Var> = Vec::with_capacity(input_var_names.len());
                 for i in 0..input_var_names.len() {
                     variable_map.insert(input_var_names[i].clone(), i);
@@ -196,12 +201,14 @@ pub fn parse_tokens(tokens: &mut Vec<Token>, function_stack: &mut Vec<FunctionSc
 fn handle_let_token(
     tokens: &mut Vec<Token>,
     stack: &mut Vec<Token>,
+    out: &mut Vec<Exp>,
     function_scope: &mut FunctionScope,
 ) -> Result<(), SyntaxError> {
 
-    match tokens.last() {
+    match tokens.pop() {
         Option::Some(Token::Operand(Operand::Var(name))) => {
             function_scope.variable_map.insert(name.clone(), function_scope.var_scope);
+            out.push(Exp::Var(Var{name: name, scope: function_scope.var_scope}))
         },
         _ => return Result::Err(SyntaxError{msg: String::from("Expected variable name after let")})
     };
@@ -441,10 +448,11 @@ fn handle_operator_token(op: Operator, stack: &mut Vec<Token>, out: &mut Vec<Exp
     Result::Ok(())
 }
 
-fn parse_function_def(tokens: &mut Vec<Token>) -> Result<Vec<String>, SyntaxError> {
+pub fn parse_input_vars(tokens: &mut Vec<Token>) -> Result<Vec<String>, SyntaxError> {
     match tokens.pop() {
-        Option::Some(Token::RoundBracketOpen) => (),
-        _ => return Result::Err(SyntaxError{msg: String::from("")})
+        Option::Some(Token::RoundBracketOpen | Token::FunctionCallOpen) => (),
+        Option::Some(tkn) => return Result::Err(SyntaxError{msg: format!("Expected `(`, found `{}`", tkn)}),
+        Option::None => return Result::Err(SyntaxError{msg: String::from("Unexpected end of file")})
     };
     let mut input_vars: Vec<String> = Vec::new();
     loop {

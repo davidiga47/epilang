@@ -6,7 +6,7 @@ The syntax is quite similar to Rust, while the programmer does not need to worry
 ```rust
 // Quick Epilang example
 let x = 3;
-let sum = fn(x, y) { x + y };
+fn sum(x, y) { x + y };
 let result = if (sum(3, x) < 6) { false } else { true };
 // returns `true`
 result
