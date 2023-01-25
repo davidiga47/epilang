@@ -103,6 +103,8 @@ pub fn parse_tokens(tokens: &mut Vec<Token>, function_stack: &mut Vec<FunctionSc
             Token::Fn => {
                 // We parse `fn` as a let expression
                 handle_let_token(tokens, &mut stack, &mut out, function_stack.last_mut().unwrap())?;
+                // at this point the function variable is in the output queue
+                let fn_var = if let Exp::Var(var) =  out.last().unwrap() { var.clone() } else { unreachable!() };
                 // Here we insert `=` so that this is parsed like a declaration with assignment
                 handle_operator_token(Operator::Assign, &mut stack, &mut out)?;
                 // Create FunctionScope and push it to function_stack
@@ -113,9 +115,13 @@ pub fn parse_tokens(tokens: &mut Vec<Token>, function_stack: &mut Vec<FunctionSc
                     variable_map.insert(input_var_names[i].clone(), i);
                     input_vars.push(Var{name: input_var_names[i].clone(), scope: i});
                 }
+                // Put self name in scope, so we can use recursion
+                variable_map.insert(fn_var.name.clone(), input_var_names.len());
+                let mut external_variables: Vec<Var> = Vec::with_capacity(1);
+                external_variables.push(fn_var);
                 function_stack.push(FunctionScope {
                     input_vars: input_vars,
-                    external_variables: Vec::new(),
+                    external_variables: external_variables,
                     var_scope: input_var_names.len(),
                     variable_map: variable_map
                 });
@@ -351,7 +357,11 @@ fn handle_curly_bracket_closed_token(stack: &mut Vec<Token>, out: &mut Vec<Exp>,
             for arg in function.input_vars {
                 args.push(arg)
             }
-            out.push(Exp::Function(args, Box::new(body)))
+            let mut external_vars: Vec<Var> = Vec::new();
+            for arg in function.external_variables {
+                external_vars.push(arg)
+            }
+            out.push(Exp::Function(args, external_vars, Box::new(body)))
         }
         _ => ()
     };

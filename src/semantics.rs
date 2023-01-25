@@ -101,8 +101,15 @@ pub fn eval_expression(exp: &Exp, stack: &mut Vec<StackValue>, stack_start: usiz
             eval_expression(if is_true {exp1} else {exp2}, stack, stack_start)
         }
 
-        Exp::Function(args, body) => {
-            Result::Ok(V::Val(Value::Fn(Function { num_args: args.len(), external_values: Vec::new(), body: body.clone() })))
+        Exp::Function(args, external_args, body) => {
+            let external_values: Vec<StackValue> = external_args.iter()
+                .map(|var| { stack[var.scope + stack_start] })
+                .collect();
+            Result::Ok(V::Val(Value::Fn(Function {
+                num_args: args.len(),
+                external_values: external_values,
+                body: body.clone()
+            })))
         },
 
         Exp::FunctionCall(callable, args) => {
@@ -118,6 +125,7 @@ pub fn eval_expression(exp: &Exp, stack: &mut Vec<StackValue>, stack_start: usiz
                             V::Val(value) => stack.push(StackValue::from_box(Box::new(value)))
                         };
                     };
+                    function.external_values.iter().for_each(|ptr| { stack.push(*ptr) });
                     let result: V = eval_expression(function.body.as_ref(), stack, function_stack_start)?;
                     for _ in 0..function.num_args {
                         stack.pop();

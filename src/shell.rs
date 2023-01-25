@@ -173,9 +173,13 @@ fn eval_fn(
         variable_map.insert(input_var_names[i].clone(), i);
         input_vars.push(Var{name: input_var_names[i].clone(), scope: i});
     }
+    // Put self name in scope, so we can use recursion
+    variable_map.insert(var_name.clone(), input_var_names.len());
+    let mut external_variables: Vec<Var> = Vec::with_capacity(1);
+    external_variables.push(Var{name: var_name.clone(), scope: function_stack.last().unwrap().var_scope});
     function_stack.push(FunctionScope {
         input_vars: input_vars,
-        external_variables: Vec::new(),
+        external_variables: external_variables,
         var_scope: input_var_names.len(),
         variable_map: variable_map
     });
@@ -189,6 +193,7 @@ fn eval_fn(
         Result::Ok(exp) => exp,
         Result::Err(err) => return Result::Err(String::from(format!("SyntaxError: {}", err.msg)))
     };
+
     function_stack.pop();
 
     let function_scope: &mut FunctionScope = function_stack.last_mut().unwrap();
@@ -200,6 +205,12 @@ fn eval_fn(
         external_values: Vec::new(),
         body: Box::new(body)
     };
-    stack.push(StackValue::from_box(Box::new(Value::Fn(function))));
+    let ptr: StackValue = StackValue::from_box(Box::new(Value::Fn(function)));
+    let mut ptr_mut = ptr;
+    match ptr_mut.as_mut_ref() {
+        Value::Fn(f) => f.external_values.push(ptr),
+        _ => panic!()
+    }
+    stack.push(ptr);
     Result::Ok(())
 }

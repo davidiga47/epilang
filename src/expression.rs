@@ -17,7 +17,7 @@ pub enum Exp {
     // If then else. Eg: if exp {exp1} else {exp2}
     IfThenElse(Box<Exp>, Box<Exp>, Box<Exp>),
     // Function definition. Eg: fn (arg_1, .. arg_n) { body }
-    Function(Vec<Var>, Box<Exp>),
+    Function(Vec<Var>, Vec<Var>, Box<Exp>),
     // Function call. Eg: exp(arg_1, ... , arg_n)
     FunctionCall(Box<Exp>, Vec<Exp>),
     // Eg: x = exp

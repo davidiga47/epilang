@@ -7,7 +7,7 @@ use crate::expression::Const;
 #[derive(Debug)]
 pub struct Function {
     pub num_args: usize,
-    pub external_values: Vec<Value>,
+    pub external_values: Vec<StackValue>,
     pub body: Box<Exp>
 }
 
