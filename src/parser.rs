@@ -100,11 +100,16 @@ pub fn parse_tokens(tokens: &mut Vec<Token>, function_stack: &mut Vec<FunctionSc
             Token::Catch => stack.push(Token::Catch),
 
             Token::Throw => {
-                stack.push(Token::Throw);
-                //if we throw an expression, the other stuff on the out stack are garbage
-                while(out.len()>0){
-                    out.pop();
-                }
+                //if we throw an expression after a Seq operator, the other stuff on the out stack are garbage
+                match stack.last(){
+                    Option::Some(Token::Operator(Operator::Seq)) => {
+                        while(out.len()>0){
+                            out.pop();
+                        }
+                    },
+                    _ => ()
+                };
+                stack.push(Token::Throw)
             },
 
             Token::Let => {
@@ -345,7 +350,11 @@ fn handle_curly_bracket_closed_token(stack: &mut Vec<Token>, out: &mut Vec<Exp>,
         // Check if this curly bracket closes an if scope
         Option::Some(Token::If) => {
             stack.pop();
-            if out.len() < 2 { return Result::Err(SyntaxError{msg: String::from("Malformed if")}) }
+            //println!("{:?} /// {:?} ///",out.pop().unwrap(),out.pop().unwrap());
+            if out.len() < 2 { 
+                //println!("{:?} ///",out.pop().unwrap());
+                return Result::Err(SyntaxError{msg: String::from("Malformed if")}) 
+            }
             let if_branch: Exp = out.pop().unwrap();
             let if_clause: Exp = out.pop().unwrap();
             out.push(Exp::IfThenElse(Box::new(if_clause), Box::new(if_branch), Box::new(Exp::Const(Const::None))))
@@ -406,7 +415,7 @@ fn handle_curly_bracket_closed_token(stack: &mut Vec<Token>, out: &mut Vec<Exp>,
                 args.push(arg)
             }
             out.push(Exp::Function(args, Box::new(body)))
-        }
+        },
         _ => ()
     };
     // Return new scope value

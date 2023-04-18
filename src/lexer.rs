@@ -229,6 +229,10 @@ fn make_token(word: &String) -> Result<Token, LexicalError> {
         "try" => Token::Try,
         "catch" => Token::Catch,
         "throw" => Token::Throw,
+        /*
+        "callcc" => Token::Callcc,
+        "setcc" => Token::Setcc,
+        "in" => Token::In,*/
         "(" => Token::RoundBracketOpen,
         ")" => Token::RoundBracketClosed,
         "[" => Token::SquareBracketOpen,

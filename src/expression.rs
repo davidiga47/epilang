@@ -55,7 +55,11 @@ pub enum Exp {
     //Eg: Try {exp1} catch (exc) {exp2}
     TryCatch(Box<Exp>,Box<Exp>,Box<Exp>),
     //Eg: Throw "DivZeroException"
-    Throw(Box<Exp>)
+    Throw(Box<Exp>),
+    //Eg: Callcc cntx in e
+    //Callcc(???,Box<Exp>),
+    //Eg: Setcc cntx
+    //Setcc(Var)
 }
 
 #[derive(Clone, Debug)]
