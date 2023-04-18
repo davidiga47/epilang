@@ -101,6 +101,25 @@ pub fn eval_expression(exp: &Exp, stack: &mut Vec<StackValue>, stack_start: usiz
             eval_expression(if is_true {exp1} else {exp2}, stack, stack_start)
         }
 
+        Exp::TryCatch(exp1,exc,exp2) => {
+            let res=eval_expression(exp1,stack,stack_start)?;
+            let res_string=res.as_string();
+            let s1: String = "ERROR: uncaught exception ".to_string();
+            let e=eval_expression(exc,stack,stack_start)?.as_string();
+            let msg: String =s1+&e;
+            if res_string.eq(&msg){
+                let v: V = eval_expression(exp2, stack, stack_start)?;
+                return Result::Ok(v)
+            }
+            return Result::Ok(res)
+        }
+
+        //evaluate the exception then returns the string containing the value. Try-Catch, if present, will try to catch the string
+        Exp::Throw(exp) => {
+            let res=eval_expression(exp,stack,stack_start)?;
+            return Result::Ok(V::Val(Value::Str("ERROR: uncaught exception ".to_string()+&res.to_string())))
+        },
+
         Exp::Function(args, body) => {
             Result::Ok(V::Val(Value::Fn(Function { num_args: args.len(), external_values: Vec::new(), body: body.clone() })))
         },

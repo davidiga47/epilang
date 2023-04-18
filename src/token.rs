@@ -18,7 +18,10 @@ pub enum Token {
     SquareBracketClosed,
     CurlyBracketOpen,
     CurlyBracketClosed,
-    Comma
+    Comma,
+    Try,
+    Catch,
+    Throw
 }
 
 impl Token {
@@ -44,6 +47,9 @@ impl Token {
             Token::CurlyBracketClosed => false,
             Token::SquareBracketOpen => false,
             Token::Comma => false,
+            Token::Try => false,
+            Token::Catch => false,
+            Token::Throw => false
         }
     }
 }
@@ -65,6 +71,9 @@ impl PartialEq for Token {
             (Token::Fn, Token::Fn) => true,
             (Token::Operand(Operand::Null), Token::Operand(Operand::Null)) => true,
             (Token::Operator(Operator::Eq), Token::Operator(Operator::Eq)) => true,
+            (Token::Try, Token::Try) => true,
+            (Token::Catch, Token::Catch) => true,
+            (Token::Throw, Token::Throw) => true,
             _ => false
         }
     }
@@ -89,6 +98,9 @@ impl fmt::Display for Token {
             Token::CurlyBracketOpen => write!(f, "{{"),
             Token::CurlyBracketClosed => write!(f, "}}"),
             Token::Comma => write!(f, ","),
+            Token::Try => write!(f, "try"),
+            Token::Catch => write!(f, "catch"),
+            Token::Throw => write!(f, "throw")
         }
     }
 }

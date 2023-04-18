@@ -95,6 +95,18 @@ pub fn parse_tokens(tokens: &mut Vec<Token>, function_stack: &mut Vec<FunctionSc
 
             Token::Else => stack.push(Token::Else),
 
+            Token::Try => stack.push(Token::Try),
+            
+            Token::Catch => stack.push(Token::Catch),
+
+            Token::Throw => {
+                stack.push(Token::Throw);
+                //if we throw an expression, the other stuff on the out stack are garbage
+                while(out.len()>0){
+                    out.pop();
+                }
+            },
+
             Token::Let => {
                 // Declaring a variable increments the variable scope
                 handle_let_token(tokens, &mut stack, function_stack.last_mut().unwrap())?
@@ -177,6 +189,17 @@ pub fn parse_tokens(tokens: &mut Vec<Token>, function_stack: &mut Vec<FunctionSc
             Option::Some(Token::While) => return Result::Err(SyntaxError{msg: String::from("Unexpected `while`")}),
             Option::Some(Token::If) => return Result::Err(SyntaxError{msg: String::from("Unexpected `if`")}),
             Option::Some(Token::Else) => return Result::Err(SyntaxError{msg: String::from("Unexpected `else`")}),
+            Option::Some(Token::Try) => return Result::Err(SyntaxError{msg: String::from("Unexpected `try`")}),
+            Option::Some(Token::Catch) => return Result::Err(SyntaxError{msg: String::from("Unexpected `catch`")}),
+            //if a throw clause is found, the next expression on out is the exception
+            Option::Some(Token::Throw) => {
+                //but the other expressions on the out stack are garbage
+                while (out.len()>1){
+                    out.pop();
+                }
+                let e: Exp=out.pop().unwrap();
+                out.push(Exp::Throw(Box::new(e)));
+            }
             Option::Some(Token::Comma) => return Result::Err(SyntaxError{msg: String::from("Unexpected `,`")}),
             Option::Some(Token::RoundBracketClosed) => panic!("Found RoundBracketClosed in parser operator stack"),
             Option::Some(Token::SquareBracketClosed) => panic!("Found SquareBracketClosed in parser operator stack"),
@@ -240,6 +263,9 @@ fn handle_square_bracket_closed_token(stack: &mut Vec<Token>, out: &mut Vec<Exp>
             Option::Some(Token::While) => panic!("Found While in parser operator stack"),
             Option::Some(Token::If) => panic!("Found If in parser operator stack"),
             Option::Some(Token::Else) => panic!("Found Else in parser operator stack"),
+            Option::Some(Token::Try) => panic!("Found try in parser operator stack"),
+            Option::Some(Token::Catch) => panic!("Found catch in parser operator stack"),
+            Option::Some(Token::Throw) => panic!("Found throw in parser operator stack"),
         }
     };
     if is_selection {
@@ -298,7 +324,13 @@ fn handle_curly_bracket_closed_token(stack: &mut Vec<Token>, out: &mut Vec<Exp>,
             Option::Some(Token::Operand(_)) => panic!("Found Operand in parser operator stack"),
             Option::Some(Token::While) => panic!("Found While in parser operator stack"),
             Option::Some(Token::If) => panic!("Found If in parser operator stack"),
-            Option::Some(Token::Else) => panic!("Found Else in parser operator stack")
+            Option::Some(Token::Else) => panic!("Found Else in parser operator stack"),
+            Option::Some(Token::Try) => panic!("Found try in parser operator stack"),
+            Option::Some(Token::Catch) => panic!("Found catch in parser operator stack"),
+            Option::Some(Token::Throw) => {
+                let e: Exp=out.pop().unwrap();
+                out.push(Exp::Throw(Box::new(e)));
+            }
         }
     };
     match stack.last() {
@@ -333,6 +365,35 @@ fn handle_curly_bracket_closed_token(stack: &mut Vec<Token>, out: &mut Vec<Exp>,
                     }
                 },
                 _ => return Result::Err(SyntaxError{msg: String::from("Unexpected else")})
+            }
+        },
+        // Check if this curly bracket closes a Try scope
+        Option::Some(Token::Try) => {
+            stack.pop();
+            if out.len() < 1 { return Result::Err(SyntaxError{msg: String::from("Malformed Try")}) }
+            let mut try_block: Exp = out.pop().unwrap();
+            match stack.last() {
+                Option::Some(Token::Throw) => try_block=Exp::Throw(Box::new(try_block)),
+                _ => ()
+            };
+            out.push(Exp::TryCatch(Box::new(try_block), Box::new(Exp::Const(Const::None)), Box::new(Exp::Const(Const::None))))
+        },
+        // Check if this curly bracket closes a Catch scope
+        Option::Some(Token::Catch) => {
+            stack.pop();
+            if out.len() < 2 { return Result::Err(SyntaxError{msg: String::from("Malformed Try-Catch")}) }
+            let exc_handler: Exp = out.pop().unwrap();
+            let exc: Exp = out.pop().unwrap();
+            match out.pop() {
+                Option::Some(Exp::TryCatch(try_block, none_exc, none_handler)) => {
+                    match *none_exc {
+                        Exp::Const(Const::None) => {
+                            out.push(Exp::TryCatch(try_block, Box::new(exc), Box::new(exc_handler)))
+                        },
+                        _ => return Result::Err(SyntaxError{msg: String::from("Try expression already has a Catch branch")})
+                    }
+                },
+                _ => return Result::Err(SyntaxError{msg: String::from("Unexpected Catch")})
             }
         },
         // Check if this curly bracket closes a function declaration
@@ -385,7 +446,10 @@ fn handle_round_bracket_closed_token(tokens: &mut Vec<Token>, stack: &mut Vec<To
             Option::Some(Token::Operand(_)) => panic!("Found Operand in parser operator stack"),
             Option::Some(Token::While) => panic!("Found While in parser operator stack"),
             Option::Some(Token::If) => panic!("Found If in parser operator stack"),
-            Option::Some(Token::Else) => panic!("Found Else in parser operator stack")
+            Option::Some(Token::Else) => panic!("Found Else in parser operator stack"),
+            Option::Some(Token::Try) => panic!("Found try in parser operator stack"),
+            Option::Some(Token::Catch) => panic!("Found catch in parser operator stack"),
+            Option::Some(Token::Throw) => (),
         }
     };
     if is_function_call {
@@ -421,8 +485,14 @@ fn handle_operator_token(op: Operator, stack: &mut Vec<Token>, out: &mut Vec<Exp
                 Token::Else |
                 Token::Let |
                 Token::Fn |
+                Token::Try |
+                Token::Catch |
                 Token::Comma
             ) => break,
+            Option::Some(Token::Throw) => {
+                found_throw = true;
+                break;
+            },
             Option::Some(Token::Operator(o2)) => {
                 if o2.precedence() >= op.precedence() {
                     break
@@ -437,7 +507,9 @@ fn handle_operator_token(op: Operator, stack: &mut Vec<Token>, out: &mut Vec<Exp
             Option::Some(Token::Operand(_) ) => panic!("Found Operand in parser operator stack"),
         }
     }
-    stack.push(Token::Operator(op));
+    if (!(found_throw)){
+        stack.push(Token::Operator(op))
+    };
     Result::Ok(())
 }
 
