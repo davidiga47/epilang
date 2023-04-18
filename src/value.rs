@@ -51,7 +51,7 @@ pub enum Value {
     Bool(bool),
     Fn(Function),
     List(Vec<StackValue>),
-    Str(String),
+    Str(String)
 }
 
 impl Value {
@@ -72,6 +72,17 @@ impl Value {
             Value::Str(s) => s == "",
             Value::Fn(_) => true,
             Value::List(_) => true
+        }
+    }
+
+    pub fn as_string(&self) -> String {
+        match self {
+            Value::Unit => String::from("Unit"),
+            Value::Bool(b) => b.to_string(),
+            Value::Int(i) => i.to_string(),
+            Value::Str(s) => s.to_string(),
+            Value::Fn(_) => String::from("Function"),
+            Value::List(_) => String::from("List")
         }
     }
 }
@@ -124,6 +135,13 @@ impl V {
         match self {
             V::Ptr(ptr) => if ptr.is_unit() {false} else {ptr.as_ref().as_bool()},
             V::Val(value) => value.as_bool()
+        }
+    }
+
+    pub fn as_string(&self) -> String {
+        match self {
+            V::Ptr(ptr) => ptr.as_ref().as_string(),
+            V::Val(value) => value.as_string()
         }
     }
 

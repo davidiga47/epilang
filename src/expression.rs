@@ -51,7 +51,7 @@ pub enum Exp {
     // Eg: exp1 || exp2
     Or(Box<Exp>, Box<Exp>),
     // Eg: !exp
-    Not(Box<Exp>)
+    Not(Box<Exp>),
     //Eg: Try {exp1} catch (exc) {exp2}
     TryCatch(Box<Exp>,Box<Exp>,Box<Exp>),
     //Eg: Throw "DivZeroException"

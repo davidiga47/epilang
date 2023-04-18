@@ -471,6 +471,7 @@ fn handle_round_bracket_closed_token(tokens: &mut Vec<Token>, stack: &mut Vec<To
 }
 
 fn handle_operator_token(op: Operator, stack: &mut Vec<Token>, out: &mut Vec<Exp>) -> Result<(), SyntaxError> {
+    let mut found_throw: bool = false;
     loop {
         match stack.last() {
             Option::None => break,
