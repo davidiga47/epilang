@@ -213,6 +213,9 @@ pub fn parse_tokens(tokens: &mut Vec<Token>, function_stack: &mut Vec<FunctionSc
     }
     
     if out.len() != 1 {
+        /*let e1: Exp = out.pop().unwrap();
+        let e2: Exp = out.pop().unwrap();
+        println!("{:?} /// {:?}",e1,e2);*/
         Result::Err(SyntaxError{msg: String::from("Can not parse a single expression. Probabily missing a ;")})
     } else if !stack.is_empty() {
         Result::Err(SyntaxError{msg: String::from("Can not parse a single expression. Probabily missing a ;")})
@@ -650,6 +653,7 @@ fn push_operator_to_out(op: &Operator, out: &mut Vec<Exp>) -> Result<(), SyntaxE
             out.push(Exp::Neq(Box::new(o1), Box::new(o2)))
         },
         Operator::And => {
+            //println!("ECCOCI: {}",out.len());
             if out.len() < 2 { return Result::Err(SyntaxError{msg: format!("Unexpected operator {}", op)}) }
             let (o2, o1) = (out.pop().unwrap(), out.pop().unwrap());
             out.push(Exp::And(Box::new(o1), Box::new(o2)))
@@ -663,7 +667,12 @@ fn push_operator_to_out(op: &Operator, out: &mut Vec<Exp>) -> Result<(), SyntaxE
             if out.len() < 1 { return Result::Err(SyntaxError{msg: format!("Unexpected operator {}", op)}) }
             let o = out.pop().unwrap();
             out.push(Exp::Not(Box::new(o)))
-        },
+        }/*,
+        Operator::Throw => {
+            if out.len() < 1 { return Result::Err(SyntaxError{msg: format!("Unexpected operator {}", op)}) }
+            let o = out.pop().unwrap();
+            out.push(Exp::Throw(Box::new(o)))
+        }*/
     }
     Result::Ok(())
 }

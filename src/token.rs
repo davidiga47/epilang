@@ -21,8 +21,8 @@ pub enum Token {
     Comma,
     Try,
     Catch,
-    Throw/*,
-    Callcc,
+    Throw,
+    /*Callcc,
     Setcc,
     In*/
 }
@@ -52,8 +52,8 @@ impl Token {
             Token::Comma => false,
             Token::Try => false,
             Token::Catch => false,
-            Token::Throw => false/*,
-            Token::Callcc => false,
+            Token::Throw => false,
+            /*Token::Callcc => false,
             Token::Setcc => false,
             Token::In => false*/
         }
@@ -79,8 +79,8 @@ impl PartialEq for Token {
             (Token::Operator(Operator::Eq), Token::Operator(Operator::Eq)) => true,
             (Token::Try, Token::Try) => true,
             (Token::Catch, Token::Catch) => true,
-            (Token::Throw, Token::Throw) => true,/*
-            (Token::Callcc, Token::Callcc) => true,
+            (Token::Throw, Token::Throw) => true,
+            /*(Token::Callcc, Token::Callcc) => true,
             (Token::Setcc, Token::Setcc) => true,
             (Token::In, Token::In) => true,*/
             _ => false
@@ -109,8 +109,8 @@ impl fmt::Display for Token {
             Token::Comma => write!(f, ","),
             Token::Try => write!(f, "try"),
             Token::Catch => write!(f, "catch"),
-            Token::Throw => write!(f, "throw")/*,
-            Token::Callcc => write!(f, "callcc"),
+            Token::Throw => write!(f, "throw"),
+            /*Token::Callcc => write!(f, "callcc"),
             Token::Setcc => write!(f, "setcc"),
             Token::In => write!(f,"in")*/
         }
