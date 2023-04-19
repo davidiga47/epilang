@@ -106,7 +106,7 @@ pub fn eval_expression(exp: &Exp, stack: &mut Vec<StackValue>, stack_start: usiz
             match res {
                 Result::Ok(_) => return Result::Ok(res?),
                 Result::Err(Error{msg}) => {
-                    let s1: String = "ERROR: uncaught exception ".to_string();
+                    let s1: String = "uncaught exception ".to_string();
                     let e=eval_expression(exc,stack,stack_start)?.as_string();
                     let s2: String =s1+&e;
                     if s2.eq(&msg){
@@ -122,7 +122,7 @@ pub fn eval_expression(exp: &Exp, stack: &mut Vec<StackValue>, stack_start: usiz
         //evaluate the exception then returns the string containing the value. Try-Catch, if present, will try to catch the string
         Exp::Throw(exp) => {
             let res=eval_expression(exp,stack,stack_start)?;
-            return Result::Err(Error{msg: String::from("ERROR: uncaught exception ".to_string()+&res.to_string())})
+            return Result::Err(Error{msg: String::from("uncaught exception ".to_string()+&res.to_string())})
         },
 
         Exp::Function(args, body) => {

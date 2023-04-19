@@ -228,7 +228,7 @@ fn make_token(word: &String) -> Result<Token, LexicalError> {
         "else" => Token:: Else,
         "try" => Token::Try,
         "catch" => Token::Catch,
-        "throw" => Token::Throw,
+        "throw" => Token::Operator(Operator::Throw),
         /*
         "callcc" => Token::Callcc,
         "setcc" => Token::Setcc,

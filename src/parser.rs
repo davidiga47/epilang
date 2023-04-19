@@ -99,19 +99,6 @@ pub fn parse_tokens(tokens: &mut Vec<Token>, function_stack: &mut Vec<FunctionSc
             
             Token::Catch => stack.push(Token::Catch),
 
-            Token::Throw => {
-                //if we throw an expression after a Seq operator, the other stuff on the out stack are garbage
-                match stack.last(){
-                    Option::Some(Token::Operator(Operator::Seq)) => {
-                        while(out.len()>0){
-                            out.pop();
-                        }
-                    },
-                    _ => ()
-                };
-                stack.push(Token::Throw)
-            },
-
             Token::Let => {
                 // Declaring a variable increments the variable scope
                 handle_let_token(tokens, &mut stack, function_stack.last_mut().unwrap())?
@@ -196,15 +183,6 @@ pub fn parse_tokens(tokens: &mut Vec<Token>, function_stack: &mut Vec<FunctionSc
             Option::Some(Token::Else) => return Result::Err(SyntaxError{msg: String::from("Unexpected `else`")}),
             Option::Some(Token::Try) => return Result::Err(SyntaxError{msg: String::from("Unexpected `try`")}),
             Option::Some(Token::Catch) => return Result::Err(SyntaxError{msg: String::from("Unexpected `catch`")}),
-            //if a throw clause is found, the next expression on out is the exception
-            Option::Some(Token::Throw) => {
-                //but the other expressions on the out stack are garbage
-                while (out.len()>1){
-                    out.pop();
-                }
-                let e: Exp=out.pop().unwrap();
-                out.push(Exp::Throw(Box::new(e)));
-            }
             Option::Some(Token::Comma) => return Result::Err(SyntaxError{msg: String::from("Unexpected `,`")}),
             Option::Some(Token::RoundBracketClosed) => panic!("Found RoundBracketClosed in parser operator stack"),
             Option::Some(Token::SquareBracketClosed) => panic!("Found SquareBracketClosed in parser operator stack"),
@@ -213,9 +191,6 @@ pub fn parse_tokens(tokens: &mut Vec<Token>, function_stack: &mut Vec<FunctionSc
     }
     
     if out.len() != 1 {
-        /*let e1: Exp = out.pop().unwrap();
-        let e2: Exp = out.pop().unwrap();
-        println!("{:?} /// {:?}",e1,e2);*/
         Result::Err(SyntaxError{msg: String::from("Can not parse a single expression. Probabily missing a ;")})
     } else if !stack.is_empty() {
         Result::Err(SyntaxError{msg: String::from("Can not parse a single expression. Probabily missing a ;")})
@@ -272,8 +247,7 @@ fn handle_square_bracket_closed_token(stack: &mut Vec<Token>, out: &mut Vec<Exp>
             Option::Some(Token::If) => panic!("Found If in parser operator stack"),
             Option::Some(Token::Else) => panic!("Found Else in parser operator stack"),
             Option::Some(Token::Try) => panic!("Found try in parser operator stack"),
-            Option::Some(Token::Catch) => panic!("Found catch in parser operator stack"),
-            Option::Some(Token::Throw) => panic!("Found throw in parser operator stack"),
+            Option::Some(Token::Catch) => panic!("Found catch in parser operator stack")
         }
     };
     if is_selection {
@@ -334,11 +308,7 @@ fn handle_curly_bracket_closed_token(stack: &mut Vec<Token>, out: &mut Vec<Exp>,
             Option::Some(Token::If) => panic!("Found If in parser operator stack"),
             Option::Some(Token::Else) => panic!("Found Else in parser operator stack"),
             Option::Some(Token::Try) => panic!("Found try in parser operator stack"),
-            Option::Some(Token::Catch) => panic!("Found catch in parser operator stack"),
-            Option::Some(Token::Throw) => {
-                let e: Exp=out.pop().unwrap();
-                out.push(Exp::Throw(Box::new(e)));
-            }
+            Option::Some(Token::Catch) => panic!("Found catch in parser operator stack")
         }
     };
     match stack.last() {
@@ -353,9 +323,7 @@ fn handle_curly_bracket_closed_token(stack: &mut Vec<Token>, out: &mut Vec<Exp>,
         // Check if this curly bracket closes an if scope
         Option::Some(Token::If) => {
             stack.pop();
-            //println!("{:?} /// {:?} ///",out.pop().unwrap(),out.pop().unwrap());
             if out.len() < 2 { 
-                //println!("{:?} ///",out.pop().unwrap());
                 return Result::Err(SyntaxError{msg: String::from("Malformed if")}) 
             }
             let if_branch: Exp = out.pop().unwrap();
@@ -385,7 +353,7 @@ fn handle_curly_bracket_closed_token(stack: &mut Vec<Token>, out: &mut Vec<Exp>,
             if out.len() < 1 { return Result::Err(SyntaxError{msg: String::from("Malformed Try")}) }
             let mut try_block: Exp = out.pop().unwrap();
             match stack.last() {
-                Option::Some(Token::Throw) => try_block=Exp::Throw(Box::new(try_block)),
+                Option::Some(Token::Operator(Operator::Throw)) => try_block=Exp::Throw(Box::new(try_block)),
                 _ => ()
             };
             out.push(Exp::TryCatch(Box::new(try_block), Box::new(Exp::Const(Const::None)), Box::new(Exp::Const(Const::None))))
@@ -461,7 +429,6 @@ fn handle_round_bracket_closed_token(tokens: &mut Vec<Token>, stack: &mut Vec<To
             Option::Some(Token::Else) => panic!("Found Else in parser operator stack"),
             Option::Some(Token::Try) => panic!("Found try in parser operator stack"),
             Option::Some(Token::Catch) => panic!("Found catch in parser operator stack"),
-            Option::Some(Token::Throw) => (),
         }
     };
     if is_function_call {
@@ -483,7 +450,6 @@ fn handle_round_bracket_closed_token(tokens: &mut Vec<Token>, stack: &mut Vec<To
 }
 
 fn handle_operator_token(op: Operator, stack: &mut Vec<Token>, out: &mut Vec<Exp>) -> Result<(), SyntaxError> {
-    let mut found_throw: bool = false;
     loop {
         match stack.last() {
             Option::None => break,
@@ -502,10 +468,6 @@ fn handle_operator_token(op: Operator, stack: &mut Vec<Token>, out: &mut Vec<Exp
                 Token::Catch |
                 Token::Comma
             ) => break,
-            Option::Some(Token::Throw) => {
-                found_throw = true;
-                break;
-            },
             Option::Some(Token::Operator(o2)) => {
                 if o2.precedence() >= op.precedence() {
                     break
@@ -520,9 +482,7 @@ fn handle_operator_token(op: Operator, stack: &mut Vec<Token>, out: &mut Vec<Exp
             Option::Some(Token::Operand(_) ) => panic!("Found Operand in parser operator stack"),
         }
     }
-    if (!(found_throw)){
-        stack.push(Token::Operator(op))
-    };
+    stack.push(Token::Operator(op));
     Result::Ok(())
 }
 
@@ -590,7 +550,7 @@ fn push_operator_to_out(op: &Operator, out: &mut Vec<Exp>) -> Result<(), SyntaxE
             if out.is_empty() { return Result::Err(SyntaxError{msg: format!("Unexpected operator {}", op)}) }
             let exp2: Exp = out.pop().unwrap();
             let exp1: Exp = out.pop().unwrap_or(Exp::Const(Const::None));
-            out.push(Exp::Seq(Box::new(exp1), Box::new(exp2)))
+            out.push(Exp::Seq(Box::new(exp1), Box::new(exp2)));
         },
         Operator::Assign => {
             if out.len() < 2 { return Result::Err(SyntaxError{msg: format!("Unexpected operator {}", op)}) }
@@ -653,7 +613,6 @@ fn push_operator_to_out(op: &Operator, out: &mut Vec<Exp>) -> Result<(), SyntaxE
             out.push(Exp::Neq(Box::new(o1), Box::new(o2)))
         },
         Operator::And => {
-            //println!("ECCOCI: {}",out.len());
             if out.len() < 2 { return Result::Err(SyntaxError{msg: format!("Unexpected operator {}", op)}) }
             let (o2, o1) = (out.pop().unwrap(), out.pop().unwrap());
             out.push(Exp::And(Box::new(o1), Box::new(o2)))
@@ -667,12 +626,12 @@ fn push_operator_to_out(op: &Operator, out: &mut Vec<Exp>) -> Result<(), SyntaxE
             if out.len() < 1 { return Result::Err(SyntaxError{msg: format!("Unexpected operator {}", op)}) }
             let o = out.pop().unwrap();
             out.push(Exp::Not(Box::new(o)))
-        }/*,
+        },
         Operator::Throw => {
             if out.len() < 1 { return Result::Err(SyntaxError{msg: format!("Unexpected operator {}", op)}) }
             let o = out.pop().unwrap();
             out.push(Exp::Throw(Box::new(o)))
-        }*/
+        }
     }
     Result::Ok(())
 }
