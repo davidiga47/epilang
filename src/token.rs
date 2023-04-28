@@ -2,6 +2,7 @@ use std::fmt;
 
 use crate::expression::{Const, Exp};
 
+#[derive(Clone)]
 pub enum Token {
     Operand(Operand),
     Operator(Operator),
@@ -21,9 +22,9 @@ pub enum Token {
     Comma,
     Try,
     Catch,
-    /*Callcc,
     Setcc,
-    In*/
+    Callcc,
+    In
 }
 
 impl Token {
@@ -51,9 +52,9 @@ impl Token {
             Token::Comma => false,
             Token::Try => false,
             Token::Catch => false,
-            /*Token::Callcc => false,
             Token::Setcc => false,
-            Token::In => false*/
+            Token::Callcc => false,
+            Token::In => false
         }
     }
 }
@@ -77,9 +78,9 @@ impl PartialEq for Token {
             (Token::Operator(Operator::Eq), Token::Operator(Operator::Eq)) => true,
             (Token::Try, Token::Try) => true,
             (Token::Catch, Token::Catch) => true,
-            /*(Token::Callcc, Token::Callcc) => true,
             (Token::Setcc, Token::Setcc) => true,
-            (Token::In, Token::In) => true,*/
+            (Token::Callcc, Token::Callcc) => true,
+            (Token::In, Token::In) => true,
             _ => false
         }
     }
@@ -106,14 +107,14 @@ impl fmt::Display for Token {
             Token::Comma => write!(f, ","),
             Token::Try => write!(f, "try"),
             Token::Catch => write!(f, "catch"),
-            /*Token::Callcc => write!(f, "callcc"),
             Token::Setcc => write!(f, "setcc"),
-            Token::In => write!(f,"in")*/
+            Token::Callcc => write!(f, "callcc"),
+            Token::In => write!(f,"in")
         }
     }
 }
 
-
+#[derive(Clone)]
 pub enum Operand {
     Null,
     Int(i32),

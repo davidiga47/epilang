@@ -16,24 +16,54 @@ pub struct FunctionScope {
     pub input_vars: Vec<Var>,
     pub external_variables: Vec<Var>,
     pub var_scope: usize,
-    pub variable_map: HashMap<String, usize>
+    pub variable_map: HashMap<String, usize>,
+    pub s_stack: Vec<Vec<Token>>,
+    pub o_stack: Vec<Vec<Exp>>,
+    pub c_stack: Vec<Exp>,
+    pub tmp_s: Vec<Vec<Token>>,
+    pub tmp_o: Vec<Vec<Exp>>,
+    pub tmp_c: Vec<Exp>
 }
 
-pub fn parse(tokens: &mut Vec<Token>) -> Result<Exp, SyntaxError> {
+pub fn parse(
+    tokens: &mut Vec<Token>/*,
+    s1: &mut Vec<Vec<Token>>,
+    o1: &mut Vec<Vec<Exp>>,
+    c1: &mut Vec<Exp>,
+    s2: &mut Vec<Vec<Token>>,
+    o2: &mut Vec<Vec<Exp>>,
+    c2: &mut Vec<Exp>,*/
+) -> Result<Exp, SyntaxError> {
     let main_scope: FunctionScope = FunctionScope {
         input_vars: Vec::new(),
         external_variables: Vec::new(),
         // Current variable scope depth
         var_scope: 0,
-        variable_map: HashMap::new()
+        variable_map: HashMap::new(),
+        s_stack: Vec::new(),
+        o_stack: Vec::new(),
+        c_stack: Vec::new(),
+        tmp_s: Vec::new(),
+        tmp_o: Vec::new(),
+        tmp_c: Vec::new()
     };
     parse_tokens(tokens, &mut vec![main_scope])
+    //parse_tokens(tokens, &mut vec![main_scope], s1, o1, c1, s2, o2, c2)
 }
 
 /**
  * If we are inside some function declaration, then this function input variables are located at `function_input_vars.last()`
  */
-pub fn parse_tokens(tokens: &mut Vec<Token>, function_stack: &mut Vec<FunctionScope>) -> Result<Exp, SyntaxError> {
+pub fn parse_tokens(
+    tokens: &mut Vec<Token>,
+    function_stack: &mut Vec<FunctionScope>/*,
+    s1: &mut Vec<Vec<Token>>,
+    o1: &mut Vec<Vec<Exp>>,
+    c1: &mut Vec<Exp>,
+    s2: &mut Vec<Vec<Token>>,
+    o2: &mut Vec<Vec<Exp>>,
+    c2: &mut Vec<Exp>,*/
+) -> Result<Exp, SyntaxError> {
     // Initialize the operator stack
     let mut stack: Vec<Token> = Vec::new();
     // Initialize the output queue
@@ -46,7 +76,7 @@ pub fn parse_tokens(tokens: &mut Vec<Token>, function_stack: &mut Vec<FunctionSc
             // Push variable to out. Error if not present in scope
             Token::Operand(Operand::Var(x)) => match function_stack.last().unwrap().variable_map.get(x) {
                 Option::Some(scope) => out.push(Exp::Var(Var{name: x.clone(), scope: *scope})),
-                Option::None => return Result::Err(SyntaxError{msg: String::from(format!("Unknow variable {}", x))})
+                Option::None => return Result::Err(SyntaxError{msg: String::from(format!("Unknown variable {}", x))})
             }
             // Operands that are not variables are easily pushed to out
             Token::Operand(o) => out.push(o.to_exp()),
@@ -62,9 +92,17 @@ pub fn parse_tokens(tokens: &mut Vec<Token>, function_stack: &mut Vec<FunctionSc
                         Option::Some(Token::Operator(Operator::Seq)) => continue,
                         _ => ()
                     },
+                    //Operator::Setcc => setcc_found=true,
                     _ => ()
                 }
                 handle_operator_token(*op, &mut stack, &mut out)?
+                /*
+                if (!(setcc_found)){
+                    handle_operator_token(*op, &mut stack, &mut out, &mut s_stack, &mut o_stack, &mut c_stack)?
+                } else {
+                    setcc_found=false;
+                    handle_setcc_token(tokens, &mut stack, function_stack.last_mut().unwrap())?
+                }*/
             },
 
             Token::ListSelectionOpen => stack.push(Token::ListSelectionOpen),
@@ -116,7 +154,13 @@ pub fn parse_tokens(tokens: &mut Vec<Token>, function_stack: &mut Vec<FunctionSc
                     input_vars: input_vars,
                     external_variables: Vec::new(),
                     var_scope: 0,
-                    variable_map: variable_map
+                    variable_map: variable_map,
+                    s_stack: Vec::new(),
+                    o_stack: Vec::new(),
+                    c_stack: Vec::new(),
+                    tmp_s: Vec::new(),
+                    tmp_o: Vec::new(),
+                    tmp_c: Vec::new()
                 });
                 stack.push(Token::Fn)
             },
@@ -154,8 +198,25 @@ pub fn parse_tokens(tokens: &mut Vec<Token>, function_stack: &mut Vec<FunctionSc
                 }
                 stack.push(Token::Comma)
             },
+
+            Token::Setcc => {
+                /*println!("{} /// {} // {}\n",token, tokens.last().unwrap(), tokens.last().unwrap());
+                return Result::Err(SyntaxError{msg: String::from(format!("PARAPROPKAPDFPNGIDJF"))});*/
+                handle_setcc_token(tokens, &mut stack, &mut out, function_stack.last_mut().unwrap())?
+            },
+
+            Token::Callcc => stack.push(Token::Callcc),
+
+            Token::In => {
+                match stack.last(){
+                    Option::Some(Token::Callcc) => stack.push(Token::In),
+                    _ => return Result::Err(SyntaxError{msg: format!("Unexpected token `in`")})
+                }
+            }
         }
     }
+
+    let mut in_found: bool = false; 
 
     loop {
         match stack.pop() {
@@ -187,6 +248,57 @@ pub fn parse_tokens(tokens: &mut Vec<Token>, function_stack: &mut Vec<FunctionSc
             Option::Some(Token::RoundBracketClosed) => panic!("Found RoundBracketClosed in parser operator stack"),
             Option::Some(Token::SquareBracketClosed) => panic!("Found SquareBracketClosed in parser operator stack"),
             Option::Some(Token::Operand(_)) => panic!("Found Operand in parser operator stack"),
+            Option::Some(Token::Setcc) => (),
+            Option::Some(Token::Callcc) => {
+                if(!(in_found)){
+                    return Result::Err(SyntaxError{msg: String::from("Malformed call/cc")})
+                };
+                in_found=false;
+                if out.len() < 2 { return Result::Err(SyntaxError{msg: String::from("Malformed call/cc")}) };
+                let expr: Exp = out.pop().unwrap();
+                let tmp: Exp = out.pop().unwrap();
+                let context: Var;
+                match tmp {
+                    Exp::Var(v) => context = v,
+                    _ => { return Result::Err(SyntaxError{msg: String::from("Malformed call/cc")}) }
+                };
+                loop{
+                    /*println!("{:?} ///", c_stack.last());
+                    return Result::Err(SyntaxError{msg: String::from("cavabunga")});*/
+                    let last_scope=function_stack.last_mut().unwrap();
+                    match last_scope.c_stack.last(){
+                        Option::Some(Exp::Var(c)) => {
+                            if (context.name==c.name){
+                                stack=last_scope.s_stack.last().unwrap().clone();
+                                out=last_scope.o_stack.last().unwrap().clone();
+                                /*println!("{} ///",o_stack.is_empty());
+                                return Result::Err(SyntaxError{msg: String::from("cavabunga")});*/
+                                break;
+                            } else {
+                                last_scope.tmp_c.push(last_scope.c_stack.pop().unwrap());
+                                last_scope.tmp_o.push(last_scope.o_stack.pop().unwrap());
+                                last_scope.tmp_s.push(last_scope.s_stack.pop().unwrap())
+                            }
+                        },
+                        _ => return Result::Err(SyntaxError{msg: String::from("context not found")}) 
+                    }
+                }
+                /*println!("{:?} ///",c_stack.last());
+                return Result::Err(SyntaxError{msg: String::from("cavabunga")});*/
+                loop{
+                    let la_sc = function_stack.last_mut().unwrap(); 
+                    match la_sc.tmp_c.last(){
+                        Option::Some(Exp) => {
+                            la_sc.c_stack.push(la_sc.tmp_c.pop().unwrap());
+                            la_sc.s_stack.push(la_sc.tmp_s.pop().unwrap());
+                            la_sc.o_stack.push(la_sc.tmp_o.pop().unwrap());
+                        },
+                        Option::None => break
+                    }
+                }
+                out.push(Exp::Callcc(context, Box::new(expr)))
+            },
+            Option::Some(Token::In) => in_found=true
         }
     }
     
@@ -205,11 +317,12 @@ fn handle_let_token(
     function_scope: &mut FunctionScope,
 ) -> Result<(), SyntaxError> {
 
+    //println!("{} ///",tokens.last().unwrap());
     match tokens.last() {
         Option::Some(Token::Operand(Operand::Var(name))) => {
             function_scope.variable_map.insert(name.clone(), function_scope.var_scope);
         },
-        _ => return Result::Err(SyntaxError{msg: String::from("Expected variable name after let")})
+        _ =>return Result::Err(SyntaxError{msg: String::from("Expected variable name after let")})
     };
 
     stack.push(Token::Let);
@@ -217,7 +330,29 @@ fn handle_let_token(
     Result::Ok(())
 }
 
-fn handle_square_bracket_closed_token(stack: &mut Vec<Token>, out: &mut Vec<Exp>, empty: bool) -> Result<(), SyntaxError> {
+fn handle_setcc_token(
+    tokens: &mut Vec<Token>,
+    stack: &mut Vec<Token>,
+    out: &mut Vec<Exp>,
+    function_scope: &mut FunctionScope
+) -> Result<(), SyntaxError> {
+    match tokens.pop() {
+        Option::Some(Token::Operand(Operand::Var(name))) => {
+            function_scope.variable_map.insert(name.clone(), function_scope.var_scope);
+            function_scope.c_stack.push(Exp::Var(Var { name: name.clone(), scope: function_scope.var_scope }));
+            //println!("{:?}\n", c_stack.last());
+            /*  return Result::Err(SyntaxError{msg: String::from("yup")});*/
+            function_scope.s_stack.push(stack.clone());
+            function_scope.o_stack.push(out.clone());
+            out.push(Exp::Setcc(Var { name: name.clone(), scope: function_scope.var_scope })) 
+        },
+        _ => return Result::Err(SyntaxError{msg: String::from("Expected variable name after setcc")})
+    };
+    //function_scope.var_scope += 1;
+    Result::Ok(())
+}
+
+fn handle_square_bracket_closed_token(stack: &mut Vec<Token>, out: &mut Vec<Exp>, empty: bool,) -> Result<(), SyntaxError> {
     let is_selection: bool;
     let mut len: usize = if empty { 0 } else { 1 };
 
@@ -247,7 +382,10 @@ fn handle_square_bracket_closed_token(stack: &mut Vec<Token>, out: &mut Vec<Exp>
             Option::Some(Token::If) => panic!("Found If in parser operator stack"),
             Option::Some(Token::Else) => panic!("Found Else in parser operator stack"),
             Option::Some(Token::Try) => panic!("Found try in parser operator stack"),
-            Option::Some(Token::Catch) => panic!("Found catch in parser operator stack")
+            Option::Some(Token::Catch) => panic!("Found catch in parser operator stack"),
+            Option::Some(Token::Setcc) => panic!("Found setcc in parser operator stack"),
+            Option::Some(Token::Callcc) => panic!("Found callcc in parser operator stack"),
+            Option::Some(Token::In) => panic!("Found in in parser operator stack")
         }
     };
     if is_selection {
@@ -308,7 +446,10 @@ fn handle_curly_bracket_closed_token(stack: &mut Vec<Token>, out: &mut Vec<Exp>,
             Option::Some(Token::If) => panic!("Found If in parser operator stack"),
             Option::Some(Token::Else) => panic!("Found Else in parser operator stack"),
             Option::Some(Token::Try) => panic!("Found try in parser operator stack"),
-            Option::Some(Token::Catch) => panic!("Found catch in parser operator stack")
+            Option::Some(Token::Catch) => panic!("Found catch in parser operator stack"),
+            Option::Some(Token::Setcc) => panic!("Found setcc in parser operator stack"),
+            Option::Some(Token::Callcc) => panic!("Found callcc in parser operator stack"),
+            Option::Some(Token::In) => panic!("Found in in parser operator stack")
         }
     };
     match stack.last() {
@@ -429,6 +570,9 @@ fn handle_round_bracket_closed_token(tokens: &mut Vec<Token>, stack: &mut Vec<To
             Option::Some(Token::Else) => panic!("Found Else in parser operator stack"),
             Option::Some(Token::Try) => panic!("Found try in parser operator stack"),
             Option::Some(Token::Catch) => panic!("Found catch in parser operator stack"),
+            Option::Some(Token::Setcc) => panic!("Found setcc in parser operator stack"),
+            Option::Some(Token::Callcc) => panic!("Found callcc in parser operator stack"),
+            Option::Some(Token::In) => panic!("Found in in parser operator stack")
         }
     };
     if is_function_call {
@@ -466,7 +610,10 @@ fn handle_operator_token(op: Operator, stack: &mut Vec<Token>, out: &mut Vec<Exp
                 Token::Fn |
                 Token::Try |
                 Token::Catch |
-                Token::Comma
+                Token::Comma |
+                Token::Setcc |
+                Token::Callcc |
+                Token::In
             ) => break,
             Option::Some(Token::Operator(o2)) => {
                 if o2.precedence() >= op.precedence() {
@@ -631,7 +778,20 @@ fn push_operator_to_out(op: &Operator, out: &mut Vec<Exp>) -> Result<(), SyntaxE
             if out.len() < 1 { return Result::Err(SyntaxError{msg: format!("Unexpected operator {}", op)}) }
             let o = out.pop().unwrap();
             out.push(Exp::Throw(Box::new(o)))
-        }
+        }/*,
+        Operator::Setcc => {
+            if out.len() < 1 { return Result::Err(SyntaxError{msg: format!("Unexpected operator {}", op)}) }
+            let tmp: Exp = out.pop().unwrap();
+            match tmp {
+                Exp::Var(v) => {
+                    c_stack.push(Exp::Var(v.clone()));
+                    s_stack.push(stack.clone());
+                    o_stack.push(out.clone());
+                    out.push(Exp::Setcc(v))
+                },
+                _ => { return Result::Err(SyntaxError{msg: String::from("Malformed set/cc")}) }
+            };
+        }*/
     }
     Result::Ok(())
 }

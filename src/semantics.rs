@@ -125,6 +125,21 @@ pub fn eval_expression(exp: &Exp, stack: &mut Vec<StackValue>, stack_start: usiz
             return Result::Err(Error{msg: String::from("uncaught exception ".to_string()+&res.to_string())})
         },
 
+        Exp::Setcc(x) => {
+            //println!("CONTESTO SALVATO");
+            
+            Result::Ok(V::Val((Value::Unit)))
+        },
+
+        Exp::Callcc(k,e) => {
+            //println!("CONTESTO RIPRISTINATO");
+            let result: Result<V, Error> = eval_expression(e,stack,stack_start);
+            match result {
+                Result::Ok(v) => return Result::Ok(v),
+                Result::Err(err) => return Result::Err(err)
+            }
+        },
+
         Exp::Function(args, body) => {
             Result::Ok(V::Val(Value::Fn(Function { num_args: args.len(), external_values: Vec::new(), body: body.clone() })))
         },
