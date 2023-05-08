@@ -24,13 +24,7 @@ pub fn run_shell() {
         external_variables: Vec::new(),
         // Current variable scope depth
         var_scope: 0,
-        variable_map: HashMap::new(),
-        s_stack : Vec::new(),
-        o_stack : Vec::new(),
-        c_stack : Vec::new(),
-        tmp_s : Vec::new(),
-        tmp_o : Vec::new(),
-        tmp_c : Vec::new()
+        variable_map: HashMap::new()
     };
     let mut function_stack: Vec<FunctionScope> = vec![main_scope];
 

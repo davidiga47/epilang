@@ -25,8 +25,8 @@ pub fn run_file(file_path: String) {
     let text = fs::read_to_string(file_path)
         .expect("Should have been able to read the file");
 
-    /*let textline = str::replace(&text, "\n", ";");
-    println!("{}", textline);*/
+    //let textline = text.replace("\n", " ");
+    println!("{}", text);
     run_string(text)
 }
 
@@ -104,9 +104,9 @@ fn exp_to_string(exp: &Exp) -> String {
         Exp::IfThenElse(e, e1, e2) => format!("if {} {{ {} }} else {{ {} }}", exp_to_string(e), exp_to_string(e1), exp_to_string(e2)),
         Exp::FunctionCall(e, args) => format!("{}({})", exp_to_string(e), args_to_string(args)),
         Exp::Throw(e) => format!("throw {}",exp_to_string(e)),
+        Exp::Throwcc(k,e) => format!("throw {} {}",exp_to_string(k),exp_to_string(e)),
         Exp::TryCatch(e1,exc,e2) => format!("try {{ {} }} catch ( {} ) {{ {} }}",exp_to_string(e1),exp_to_string(exc),exp_to_string(e2)),
-        Exp::Callcc(k,e) => format!("callcc {} in {}",var_to_string(k),exp_to_string(e)),
-        Exp::Setcc(x) => format!("setcc {}",var_to_string(x))
+        Exp::Callcc(k,e) => format!("callcc {} in {}",var_to_string(k),exp_to_string(e))
     }
 }
 

@@ -22,7 +22,6 @@ pub enum Token {
     Comma,
     Try,
     Catch,
-    Setcc,
     Callcc,
     In
 }
@@ -52,7 +51,6 @@ impl Token {
             Token::Comma => false,
             Token::Try => false,
             Token::Catch => false,
-            Token::Setcc => false,
             Token::Callcc => false,
             Token::In => false
         }
@@ -78,7 +76,6 @@ impl PartialEq for Token {
             (Token::Operator(Operator::Eq), Token::Operator(Operator::Eq)) => true,
             (Token::Try, Token::Try) => true,
             (Token::Catch, Token::Catch) => true,
-            (Token::Setcc, Token::Setcc) => true,
             (Token::Callcc, Token::Callcc) => true,
             (Token::In, Token::In) => true,
             _ => false
@@ -107,7 +104,6 @@ impl fmt::Display for Token {
             Token::Comma => write!(f, ","),
             Token::Try => write!(f, "try"),
             Token::Catch => write!(f, "catch"),
-            Token::Setcc => write!(f, "setcc"),
             Token::Callcc => write!(f, "callcc"),
             Token::In => write!(f,"in")
         }
@@ -165,13 +161,15 @@ pub enum Operator {
     Mul,
     Div,
     Mod,
-    Throw
+    Throw,
+    Throwcc
 }
 
 impl Operator {
     pub fn precedence(&self) -> i32 {
         match self {
             Operator::Throw => 0,
+            Operator::Throwcc => 0,
             Operator::Mul => 1,
             Operator::Div => 1,
             Operator::Mod => 1,
@@ -211,7 +209,8 @@ impl fmt::Display for Operator {
             Operator::Or => write!(f, "{}","||"),
             Operator::Assign => write!(f, "{}","="),
             Operator::Seq => write!(f, "{}",";"),
-            Operator::Throw => write!(f,"{}","throw")
+            Operator::Throw => write!(f,"{}","throw"),
+            Operator::Throwcc => write!(f,"{}","throw")
         }
     }
 }

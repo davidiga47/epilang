@@ -1,6 +1,7 @@
 use crate::expression::Exp;
 use crate::parser::SyntaxError;
 use crate::value::{Value, StackValue, Function, V};
+use substring::Substring;
 
 pub struct Error {
     pub msg: String
@@ -125,18 +126,27 @@ pub fn eval_expression(exp: &Exp, stack: &mut Vec<StackValue>, stack_start: usiz
             return Result::Err(Error{msg: String::from("uncaught exception ".to_string()+&res.to_string())})
         },
 
-        Exp::Setcc(x) => {
-            //println!("CONTESTO SALVATO");
-            
-            Result::Ok(V::Val((Value::Unit)))
+        Exp::Throwcc(k,e) => {
+            let res=eval_expression(e,stack,stack_start)?;
+            return Result::Err(Error{msg: String::from(&res.to_string())})
         },
 
         Exp::Callcc(k,e) => {
-            //println!("CONTESTO RIPRISTINATO");
+            /*
             let result: Result<V, Error> = eval_expression(e,stack,stack_start);
             match result {
                 Result::Ok(v) => return Result::Ok(v),
                 Result::Err(err) => return Result::Err(err)
+            }*/
+            let res: Result<V, Error> = eval_expression(e,stack,stack_start);
+            match res {
+                Result::Ok(_) => return Result::Ok(res?),
+                Result::Err(Error{msg}) => {
+                    if (msg.len()>18 && msg.substring(0,18).eq(&"uncaught exception".to_string())) { return Result::Err(Error{msg: msg})};
+                    let numb: isize = msg.parse().unwrap();
+                    return Result::Ok(V::Val(Value::Int(numb)))
+                }
+                
             }
         },
 

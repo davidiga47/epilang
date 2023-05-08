@@ -56,10 +56,10 @@ pub enum Exp {
     TryCatch(Box<Exp>,Box<Exp>,Box<Exp>),
     //Eg: Throw "DivZeroException"
     Throw(Box<Exp>),
+    //Eg: throw k 5
+    Throwcc(Box<Exp>, Box<Exp>),
     //Eg: Callcc k in e
-    Callcc(Var,Box<Exp>),
-    //Eg: Setcc k
-    Setcc(Var)
+    Callcc(Var,Box<Exp>)
 }
 
 #[derive(Clone, Debug)]
