@@ -97,7 +97,16 @@ pub fn parse_tokens(tokens: &mut Vec<Token>, function_stack: &mut Vec<FunctionSc
 
             Token::Try => stack.push(Token::Try),
             
-            Token::Catch => stack.push(Token::Catch),
+            Token::Catch => {
+                stack.push(Token::Catch);
+                let function_scope=function_stack.last_mut().unwrap();
+                match tokens.last() {
+                    Option::Some(Token::Operand(Operand::Var(name))) => {
+                        function_scope.variable_map.insert(name.clone(), function_scope.var_scope);
+                    },
+                    _ =>return Result::Err(SyntaxError{msg: String::from("Expected variable name after catch token")})
+                };
+            },
 
             Token::Let => {
                 // Declaring a variable increments the variable scope
@@ -126,10 +135,6 @@ pub fn parse_tokens(tokens: &mut Vec<Token>, function_stack: &mut Vec<FunctionSc
             Token::CurlyBracketClosed => {
                 // Closing curly brackets can decrement scope
                 handle_curly_bracket_closed_token(&mut stack, &mut out, function_stack)?;
-                
-                //QUESTO SOTTO SERVE AD EVITARE ALL'UTENTE DI INSERIRE MANUALMENTE I ";" DOPO LE GRAFFE CHIUSE
-                //TUTTAVIA SCOMMENTANDOLO L'INTERPRETE HA DIFFICOLTÀ NEL PARSARE LE CONTINUAZIONI
-                
                 // After closing a curly bracket we automatically insert `;` if not present.
                 // This makes the syntax more similar to Java, C++ etc
                 match tokens.last() {
@@ -345,7 +350,6 @@ fn handle_curly_bracket_closed_token(stack: &mut Vec<Token>, out: &mut Vec<Exp>,
             Option::Some(Token::In) => panic!("Found in in parser operator stack")
         }
     };
-    //println!("{} ///\n\n",stack.last().unwrap());
     match stack.last() {
         // Check if this curly bracket closes a while scope
         Option::Some(Token::While) => {
@@ -391,22 +395,22 @@ fn handle_curly_bracket_closed_token(stack: &mut Vec<Token>, out: &mut Vec<Exp>,
                 Option::Some(Token::Operator(Operator::Throw)) => try_block=Exp::Throw(Box::new(try_block)),
                 _ => ()
             };
-            out.push(Exp::TryCatch(Box::new(try_block), Box::new(Exp::Const(Const::None)), Box::new(Exp::Const(Const::None))))
+            out.push(Exp::Try(Box::new(try_block)))
         },
         // Check if this curly bracket closes a Catch scope
         Option::Some(Token::Catch) => {
             stack.pop();
             if out.len() < 2 { return Result::Err(SyntaxError{msg: String::from("Malformed Try-Catch")}) }
             let exc_handler: Exp = out.pop().unwrap();
-            let exc: Exp = out.pop().unwrap();
+            let exc_exp: Exp = out.pop().unwrap();
+            let exc: Var;
+            match exc_exp {
+                Exp::Var(v) => exc=v,
+                _ => return Result::Err(SyntaxError{msg: String::from("Malformed Try-Catch")}) 
+            }
             match out.pop() {
-                Option::Some(Exp::TryCatch(try_block, none_exc, none_handler)) => {
-                    match *none_exc {
-                        Exp::Const(Const::None) => {
-                            out.push(Exp::TryCatch(try_block, Box::new(exc), Box::new(exc_handler)))
-                        },
-                        _ => return Result::Err(SyntaxError{msg: String::from("Try expression already has a Catch branch")})
-                    }
+                Option::Some(Exp::Try(try_block)) => {
+                    out.push(Exp::TryCatch(try_block, exc, Box::new(exc_handler)))
                 },
                 _ => return Result::Err(SyntaxError{msg: String::from("Unexpected Catch")})
             }

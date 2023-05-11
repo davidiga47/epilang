@@ -1,4 +1,4 @@
-use crate::expression::Exp;
+use crate::expression::{Exp, Const};
 use crate::parser::SyntaxError;
 use crate::value::{Value, StackValue, Function, V};
 use substring::Substring;
@@ -102,19 +102,30 @@ pub fn eval_expression(exp: &Exp, stack: &mut Vec<StackValue>, stack_start: usiz
             eval_expression(if is_true {exp1} else {exp2}, stack, stack_start)
         }
 
+        Exp::Try(exp1)=> {
+            let res: Result<V, Error> = eval_expression(exp1,stack,stack_start);
+            match res {
+                Result::Ok(_) => return Result::Ok(res?),
+                Result::Err(Error{msg}) => {
+                    return Result::Err(Error{msg})
+                }
+            }
+        }
+        
         Exp::TryCatch(exp1,exc,exp2) => {
             let res: Result<V, Error> = eval_expression(exp1,stack,stack_start);
             match res {
                 Result::Ok(_) => return Result::Ok(res?),
                 Result::Err(Error{msg}) => {
-                    let s1: String = "uncaught exception ".to_string();
-                    let e=eval_expression(exc,stack,stack_start)?.as_string();
-                    let s2: String =s1+&e;
-                    if s2.eq(&msg){
-                        let v: V = eval_expression(exp2, stack, stack_start)?;
-                        return Result::Ok(v)
-                    } else {
-                        return Result::Err(Error{msg})
+                    let val: i32=msg.substring(19,msg.len()).parse().unwrap();
+                    let val_exp: Exp = Exp::Const(Const::Integer(val));
+                    let tmp: Result<V, Error> = eval_expression(&Exp::Decl(exc.clone(),Box::new(val_exp),exp2.clone()),stack,stack_start);
+                    match tmp {
+                        Result::Ok(v) => {
+                            return Result::Ok(v)
+                        }
+                        Result::Err(Error{msg}) => return Result::Err(Error{msg}), 
+                        _ => return Result::Err(Error{msg: String::from("Unknown error")})
                     }
                 }
             }
@@ -132,12 +143,6 @@ pub fn eval_expression(exp: &Exp, stack: &mut Vec<StackValue>, stack_start: usiz
         },
 
         Exp::Callcc(k,e) => {
-            /*
-            let result: Result<V, Error> = eval_expression(e,stack,stack_start);
-            match result {
-                Result::Ok(v) => return Result::Ok(v),
-                Result::Err(err) => return Result::Err(err)
-            }*/
             let res: Result<V, Error> = eval_expression(e,stack,stack_start);
             match res {
                 Result::Ok(_) => return Result::Ok(res?),

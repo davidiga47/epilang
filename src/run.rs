@@ -105,7 +105,8 @@ fn exp_to_string(exp: &Exp) -> String {
         Exp::FunctionCall(e, args) => format!("{}({})", exp_to_string(e), args_to_string(args)),
         Exp::Throw(e) => format!("throw {}",exp_to_string(e)),
         Exp::Throwcc(k,e) => format!("throw {} {}",exp_to_string(k),exp_to_string(e)),
-        Exp::TryCatch(e1,exc,e2) => format!("try {{ {} }} catch ( {} ) {{ {} }}",exp_to_string(e1),exp_to_string(exc),exp_to_string(e2)),
+        Exp::Try(e) => format!("try {{ {} }}",exp_to_string(e)),
+        Exp::TryCatch(e1,exc,e2) => format!("try {{ {} }} catch ( {} ) {{ {} }}",exp_to_string(e1),var_to_string(exc),exp_to_string(e2)),
         Exp::Callcc(k,e) => format!("callcc {} in {}",var_to_string(k),exp_to_string(e))
     }
 }

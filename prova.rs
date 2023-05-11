@@ -1,7 +1,8 @@
-{
-    let a = 2; 
-    {
-        let a = 3;
-    };
-    a 
+callcc k in {
+    try {
+        throw 3
+    } catch x {
+        throw k x
+    }
 }
+
