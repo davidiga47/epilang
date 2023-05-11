@@ -1,0 +1,60 @@
+epilang> try {3} catch (3) {42}
+3
+epilang> try {throw 3} catch (3) {42}
+42
+epilang> try {throw 4} catch (3) {42}
+Error: uncaught exception 4
+epilang> {try {3}}
+3
+epilang> {try {3} catch (3) {42}}
+3
+epilang> {try {throw 3} catch (3) {42}}
+42
+epilang> callcc x in {{try {throw 3} catch (3) {42}}}
+42
+epilang> callcc x in {try {4} catch (4) {42}}
+4
+epilang> callcc x in {try {throw 4} catch (4) {throw x 42}}
+42
+epilang> callcc x in {try {throw 4} catch (4) {throw x 42}} ; 76
+76
+epilang> callcc x in {try {throw 4} catch (4) {throw x 42}} ; x+1
+thread 'main' panicked at 'index out of bounds: the len is 0 but the index is 0', src/semantics.rs:20:31
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+(base) [shaggy@computer-2 epilang]$ ./target/release/epilang 
+epilang> let x=callcc k in {try {throw 4} catch (4) {throw x 42}} ; x+2
+SyntaxError: Unknown variable x
+epilang> let x=3 ; x+1
+SyntaxError: Unknown variable x
+epilang> let x = 3 ; x+1
+SyntaxError: Unknown variable x
+epilang> let x = 3 ; 2
+epilang> let x = 3 ; 2
+
+
+callcc x in {
+    let a = 2;
+    let res = callcc y in {
+        let a = 3 ;
+        throw y 1
+    };
+    a    
+}
+
+callcc x in {let a=2 ; callcc y in {let a=3 ; a} ; a} QUESTO DÀ ERRORE E NON DOVREBBE
+
+{
+    let a = 2; 
+    {
+        let a = 3;
+    };
+    a 
+}
+let a_0 = 2;
+let a_1 = 3;
+None;
+a_1
+########
+thread 'main' panicked at 'index out of bounds: the len is 1 but the index is 1', src/semantics.rs:20:31
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+

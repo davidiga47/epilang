@@ -48,7 +48,7 @@ pub fn parse_tokens(tokens: &mut Vec<Token>, function_stack: &mut Vec<FunctionSc
                 Option::Some(scope) => out.push(Exp::Var(Var{name: x.clone(), scope: *scope})),
                 Option::None => return Result::Err(SyntaxError{msg: String::from(format!("Unknown variable {}", x))})
             }
-            // Operands that are not variables are easily pushed to out
+            // Operands that are not variables are easily pushed to out 
             Token::Operand(o) => out.push(o.to_exp()),
 
             // Handle operator tokens. Remember that also `;` is an operator, like also `+`, `=`, etc...
@@ -126,6 +126,10 @@ pub fn parse_tokens(tokens: &mut Vec<Token>, function_stack: &mut Vec<FunctionSc
             Token::CurlyBracketClosed => {
                 // Closing curly brackets can decrement scope
                 handle_curly_bracket_closed_token(&mut stack, &mut out, function_stack)?;
+                
+                //QUESTO SOTTO SERVE AD EVITARE ALL'UTENTE DI INSERIRE MANUALMENTE I ";" DOPO LE GRAFFE CHIUSE
+                //TUTTAVIA SCOMMENTANDOLO L'INTERPRETE HA DIFFICOLTÀ NEL PARSARE LE CONTINUAZIONI
+                
                 // After closing a curly bracket we automatically insert `;` if not present.
                 // This makes the syntax more similar to Java, C++ etc
                 match tokens.last() {
@@ -133,8 +137,14 @@ pub fn parse_tokens(tokens: &mut Vec<Token>, function_stack: &mut Vec<FunctionSc
                     Option::Some(Token::Else) => (),
                     Option::Some(Token::CurlyBracketClosed) => (),
                     Option::None => (),
-                    _ => tokens.push(Token::Operator(Operator::Seq))
+                    _ => {
+                        match stack.last(){
+                            Option::Some(Token::In) => tokens.push(Token::Operator(Operator::Seq)),
+                            _ => ()
+                        }
+                    }
                 }
+
             },
             Token::Comma => {
                 loop {
