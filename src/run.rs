@@ -24,8 +24,6 @@ use std::fs;
 pub fn run_file(file_path: String) {
     let text = fs::read_to_string(file_path)
         .expect("Should have been able to read the file");
-
-    //let textline = text.replace("\n", " ");
     println!("{}", text);
     run_string(text)
 }

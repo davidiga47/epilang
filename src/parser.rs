@@ -100,6 +100,8 @@ pub fn parse_tokens(tokens: &mut Vec<Token>, function_stack: &mut Vec<FunctionSc
             Token::Catch => {
                 stack.push(Token::Catch);
                 let function_scope=function_stack.last_mut().unwrap();
+                //searches for an exception to catch, it needs to add it to the variables environment 
+                //otherwise the interpreter will try to evaluate the exception and fail
                 match tokens.last() {
                     Option::Some(Token::Operand(Operand::Var(name))) => {
                         function_scope.variable_map.insert(name.clone(), function_scope.var_scope);
@@ -142,12 +144,7 @@ pub fn parse_tokens(tokens: &mut Vec<Token>, function_stack: &mut Vec<FunctionSc
                     Option::Some(Token::Else) => (),
                     Option::Some(Token::CurlyBracketClosed) => (),
                     Option::None => (),
-                    _ => {
-                        match stack.last(){
-                            Option::Some(Token::In) => tokens.push(Token::Operator(Operator::Seq)),
-                            _ => ()
-                        }
-                    }
+                    _ => ()
                 }
 
             },
@@ -172,6 +169,7 @@ pub fn parse_tokens(tokens: &mut Vec<Token>, function_stack: &mut Vec<FunctionSc
 
             Token::Callcc => {
                 stack.push(Token::Callcc);
+                //we need to add the continuation label to the variables environment, for the same reason as above with catch
                 let function_scope=function_stack.last_mut().unwrap();
                 match tokens.last() {
                     Option::Some(Token::Operand(Operand::Var(name))) => {
@@ -402,14 +400,15 @@ fn handle_curly_bracket_closed_token(stack: &mut Vec<Token>, out: &mut Vec<Exp>,
             stack.pop();
             if out.len() < 2 { return Result::Err(SyntaxError{msg: String::from("Malformed Try-Catch")}) }
             let exc_handler: Exp = out.pop().unwrap();
-            let exc_exp: Exp = out.pop().unwrap();
-            let exc: Var;
+            let exc_exp: Exp = out.pop().unwrap();  //This is the expression representing the excpetion label (it's a variable for the interpreter)
+            let exc: Var;                           
             match exc_exp {
-                Exp::Var(v) => exc=v,
+                Exp::Var(v) => exc=v,               //In fact we cast it to a Var
                 _ => return Result::Err(SyntaxError{msg: String::from("Malformed Try-Catch")}) 
             }
             match out.pop() {
                 Option::Some(Exp::Try(try_block)) => {
+                    //if we have previously found a Try then we have a TryCatch expression
                     out.push(Exp::TryCatch(try_block, exc, Box::new(exc_handler)))
                 },
                 _ => return Result::Err(SyntaxError{msg: String::from("Unexpected Catch")})
@@ -433,14 +432,17 @@ fn handle_curly_bracket_closed_token(stack: &mut Vec<Token>, out: &mut Vec<Exp>,
                     stack.pop();
                     if out.len() < 2 { return Result::Err(SyntaxError{msg: String::from("Malformed call/cc")}) };
                     let expr: Exp = out.pop().unwrap();
-                    let tmp: Exp = out.pop().unwrap();
+                    let tmp: Exp = out.pop().unwrap();  //This is the expression representing the continuation label 
+                                                        //(it's a variable for the interpreter)
                     let context: Var;
                     match tmp {
-                        Exp::Var(v) => context = v,
+                        Exp::Var(v) => context = v,     //In fact we cast it to a Var
                         _ => { return Result::Err(SyntaxError{msg: String::from("Malformed call/cc")}) }
                     };
-                    out.push(Exp::Callcc(context.clone(), Box::new(expr)))
+                    out.push(Exp::Callcc(context.clone(), Box::new(expr)));
+                    //push_callcc_expr_to_out(out, function_stack.last().unwrap().var_scope)?
                 },
+                //If there's not a Callcc token there shouldn't be a In token 
                 _ => return Result::Err(SyntaxError{msg: String::from("Malformed call/cc")})
             }
         },
@@ -545,7 +547,23 @@ fn handle_operator_token(op: Operator, stack: &mut Vec<Token>, out: &mut Vec<Exp
     }
     match op {
         Operator::Throw => {
-            let tmp=tokens.pop().unwrap();
+            let tmp=tokens.pop().unwrap();      //we temporarily store the excpetion (or continuation) label
+            let mut tmp_stack=Vec::new();
+            match tmp {
+                Token::SquareBracketOpen => {
+                    loop{
+                        match tokens.last(){
+                            Option::Some(Token::SquareBracketClosed) => {
+                                tmp_stack.push(tokens.pop().unwrap());
+                                break;
+                            },
+                            Option::Some(tkn) => tmp_stack.push(tokens.pop().unwrap()),
+                            Option::None => break
+                        };
+                    }
+                },
+                _ => ()
+            };
             match tokens.last() {
                 Option::Some(
                     Token::Operator(Operator::Seq) | 
@@ -554,9 +572,16 @@ fn handle_operator_token(op: Operator, stack: &mut Vec<Token>, out: &mut Vec<Exp
                     Token::CurlyBracketClosed
                 ) => stack.push(Token::Operator(Operator::Throw)),
                 Option::None => stack.push(Token::Operator(Operator::Throw)), 
+                //If there's another expression after the label this is a Throwcc expression. Otherwise it's a normal Throw
                 _ => stack.push(Token::Operator(Operator::Throwcc))
             };
-            tokens.push(tmp);
+            tokens.push(tmp);                   //we push again the label we temporarily popped
+            loop {
+                match tmp_stack.last(){
+                    Option::None => break,
+                    Option::Some(tkn) => tokens.push(tmp_stack.pop().unwrap())
+                }
+            };
         },
         _ => stack.push(Token::Operator(op))
     }
@@ -718,3 +743,4 @@ fn push_operator_to_out(op: &Operator, out: &mut Vec<Exp>) -> Result<(), SyntaxE
     }
     Result::Ok(())
 }
+    

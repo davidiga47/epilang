@@ -52,15 +52,15 @@ pub enum Exp {
     Or(Box<Exp>, Box<Exp>),
     // Eg: !exp
     Not(Box<Exp>),
-    //Eg: Try {exp}
+    //Eg: try {exp}
     Try(Box<Exp>),
-    //Eg: Try {exp1} catch (exc) {exp2}
+    //Eg: try {exp1} catch exc {exp2}
     TryCatch(Box<Exp>,Var,Box<Exp>),
-    //Eg: Throw "DivZeroException"
+    //Eg: throw "DivZeroException"
     Throw(Box<Exp>),
     //Eg: throw k 5
     Throwcc(Box<Exp>, Box<Exp>),
-    //Eg: Callcc k in e
+    //Eg: callcc k in e
     Callcc(Var,Box<Exp>)
 }
 

@@ -1,10 +1,14 @@
 use crate::expression::{Exp, Const};
 use crate::parser::SyntaxError;
 use crate::value::{Value, StackValue, Function, V};
+use crate::value::Value::Unit;
+use crate::value::V::Val;
+use crate::value::V::Ptr;
 use substring::Substring;
 
 pub struct Error {
-    pub msg: String
+    pub msg: String,
+    pub v: V
 }
 
 pub fn eval(exp: &Exp) -> Result<V, Error> {
@@ -47,8 +51,8 @@ pub fn eval_expression(exp: &Exp, stack: &mut Vec<StackValue>, stack_start: usiz
             let index: V = eval_expression(index, stack, stack_start)?;
             let value = match (list.as_ref(), index.as_ref()) {
                 (Value::List(values), Value::Int(i)) => values.get(*i as usize)
-                    .ok_or(Error{msg: String::from("List index out of range")})?,
-                _ => return Result::Err(Error{msg: String::from("q")})
+                    .ok_or(Error{msg: String::from("List index out of range"), v:Val(Unit)})?,
+                _ => return Result::Err(Error{msg: String::from("q"), v:Val(Unit)})
             };
             Result::Ok(V::Ptr(*value))
         }
@@ -64,21 +68,21 @@ pub fn eval_expression(exp: &Exp, stack: &mut Vec<StackValue>, stack_start: usiz
                     let mut list = eval_expression(list.as_ref(), stack, stack_start)?;
                     let list: &mut Vec<StackValue> = match list.as_mut_ref() {
                         Value::List(list) => list,
-                        _ => return Result::Err(Error{msg: String::from("Expected list value before list selection")})
+                        _ => return Result::Err(Error{msg: String::from("Expected list value before list selection"), v:Val(Unit)})
                     };
                     let index: usize = match eval_expression(index.as_ref(), stack, stack_start)?.as_ref() {
                         Value::Int(i) => *i as usize,
-                        _ => return Result::Err(Error{msg: String::from("Expected number in list selection")})
+                        _ => return Result::Err(Error{msg: String::from("Expected number in list selection"), v:Val(Unit)})
                     };
                     if index >= list.len() {
-                        return Result::Err(Error{msg: String::from("List index out of range")})
+                        return Result::Err(Error{msg: String::from("List index out of range"), v:Val(Unit)})
                     }
                     list[index] = match right_value {
                         V::Ptr(ptr) => ptr,
                         V::Val(value) => StackValue::from_box(Box::new(value))
                     }
                 },
-                _ => return Result::Err(Error{msg: String::from("Invalid left-hand side in assignment")})
+                _ => return Result::Err(Error{msg: String::from("Invalid left-hand side in assignment"), v:Val(Unit)})
             }
             Result::Ok(V::Ptr(StackValue::unit()))
         }
@@ -106,8 +110,8 @@ pub fn eval_expression(exp: &Exp, stack: &mut Vec<StackValue>, stack_start: usiz
             let res: Result<V, Error> = eval_expression(exp1,stack,stack_start);
             match res {
                 Result::Ok(_) => return Result::Ok(res?),
-                Result::Err(Error{msg}) => {
-                    return Result::Err(Error{msg})
+                Result::Err(Error{msg, v}) => {
+                    return Result::Err(Error{msg, v})
                 }
             }
         }
@@ -116,40 +120,48 @@ pub fn eval_expression(exp: &Exp, stack: &mut Vec<StackValue>, stack_start: usiz
             let res: Result<V, Error> = eval_expression(exp1,stack,stack_start);
             match res {
                 Result::Ok(_) => return Result::Ok(res?),
-                Result::Err(Error{msg}) => {
-                    let val: i32=msg.substring(19,msg.len()).parse().unwrap();
-                    let val_exp: Exp = Exp::Const(Const::Integer(val));
+                Result::Err(Error{msg, v}) => {
+                    let val_exp = match v.as_ref() {
+                        Value::Unit => Exp::Const(Const::None),
+                        Value::Int(x) => Exp::Const(Const::Integer((*x).try_into().unwrap())),
+                        Value::Bool(b) => Exp::Const(Const::Boolean(*b)),
+                        Value::Fn(f) => Exp::Function(Vec::new(), f.body.clone()),
+                        Value::Str(s) => Exp::Const(Const::String(s.to_string())),
+                        _ => Exp::Const(Const::None)//Exp::List(v.as_ref().unwrap())
+                    };
                     let tmp: Result<V, Error> = eval_expression(&Exp::Decl(exc.clone(),Box::new(val_exp),exp2.clone()),stack,stack_start);
                     match tmp {
                         Result::Ok(v) => {
                             return Result::Ok(v)
                         }
-                        Result::Err(Error{msg}) => return Result::Err(Error{msg}), 
-                        _ => return Result::Err(Error{msg: String::from("Unknown error")})
+                        Result::Err(Error{msg, v}) => return Result::Err(Error{msg, v}), 
+                        _ => return Result::Err(Error{msg: String::from("Unknown error"), v:Val(Unit)})
                     }
                 }
             }
         }
 
-        //evaluate the exception then returns the string containing the value. Try-Catch, if present, will try to catch the string
+        //evaluate the exception then returns the string containing the value. Try-Catch, if present, will handle the exception thrown
         Exp::Throw(exp) => {
             let res=eval_expression(exp,stack,stack_start)?;
-            return Result::Err(Error{msg: String::from("uncaught exception ".to_string()+&res.to_string())})
+            return Result::Err(Error{msg: String::from("uncaught exception ".to_string()+&res.to_string()), v:res})
         },
 
+        //E.g. throw k 2 => this is used to evaluate a block of the type `callcc k in e`
         Exp::Throwcc(k,e) => {
             let res=eval_expression(e,stack,stack_start)?;
-            return Result::Err(Error{msg: String::from(&res.to_string())})
+            return Result::Err(Error{msg: String::from(&res.to_string()), v:res})
         },
 
+        //calls the current continuation as k and then evaluates the expression e. 
+        //If k is thrown inside e with `throw k m`, then `callcc k in e` evaluates to m
         Exp::Callcc(k,e) => {
             let res: Result<V, Error> = eval_expression(e,stack,stack_start);
             match res {
                 Result::Ok(_) => return Result::Ok(res?),
-                Result::Err(Error{msg}) => {
-                    if (msg.len()>18 && msg.substring(0,18).eq(&"uncaught exception".to_string())) { return Result::Err(Error{msg: msg})};
-                    let numb: isize = msg.parse().unwrap();
-                    return Result::Ok(V::Val(Value::Int(numb)))
+                Result::Err(Error{msg, v}) => {
+                    if (msg.len()>18 && msg.substring(0,18).eq(&"uncaught exception".to_string())) { return Result::Err(Error{msg: msg, v: v})};
+                    return Result::Ok(v)
                 }
                 
             }
@@ -163,7 +175,7 @@ pub fn eval_expression(exp: &Exp, stack: &mut Vec<StackValue>, stack_start: usiz
             match eval_expression(callable, stack, stack_start)?.as_ref() {
                 Value::Fn(function) => {
                     if args.len() != function.num_args {
-                        return Result::Err(Error { msg: format!("Wrong number of arguments. Expected {}, found {}", function.num_args, args.len()) })
+                        return Result::Err(Error { msg: format!("Wrong number of arguments. Expected {}, found {}", function.num_args, args.len()), v:Val(Unit) })
                     }
                     let function_stack_start: usize = stack.len();
                     for arg in args {
@@ -178,7 +190,7 @@ pub fn eval_expression(exp: &Exp, stack: &mut Vec<StackValue>, stack_start: usiz
                     }
                     Result::Ok(result)
                 },
-                _ => return Result::Err(Error{msg: String::from("Expression is not callable")})
+                _ => return Result::Err(Error{msg: String::from("Expression is not callable"), v:Val(Unit)})
             }
         },
 
@@ -287,9 +299,9 @@ fn sum(val1: &Value, val2: &Value) -> Result<Value, Error> {
             Result::Ok(Value::List(list))
         }
 
-        (Value::List(_), other) => return Result::Err(Error{msg: format!("cannot concatenate list to {}", other)}),
+        (Value::List(_), other) => return Result::Err(Error{msg: format!("cannot concatenate list to {}", other), v:Val(Unit)}),
 
-        (other, Value::List(_)) => return Result::Err(Error{msg: format!("cannot concatenate {} to list", other)}),
+        (other, Value::List(_)) => return Result::Err(Error{msg: format!("cannot concatenate {} to list", other), v:Val(Unit)}),
 
         (a, b) => Result::Ok(Value::Str(format!("{}{}", a, b))),
     }
@@ -298,56 +310,56 @@ fn sum(val1: &Value, val2: &Value) -> Result<Value, Error> {
 fn sub(val1: &Value, val2: &Value) -> Result<Value, Error> {
     match (val1, val2) {
         (Value::Int(i1), Value::Int(i2)) => Result::Ok(Value::Int(i1 - i2)),
-        _ => Result::Err(Error{msg: format!("Unsupported - operator for values {}, {}",val1, val2)})
+        _ => Result::Err(Error{msg: format!("Unsupported - operator for values {}, {}",val1, val2), v:Val(Unit)})
     }
 }
 
 fn mul(val1: &Value, val2: &Value) -> Result<Value, Error> {
     match (val1, val2) {
         (Value::Int(i1), Value::Int(i2)) => Result::Ok(Value::Int(i1 * i2)),
-        _ => Result::Err(Error{msg: format!("Unsupported * operator for values {}, {}",val1, val2)})
+        _ => Result::Err(Error{msg: format!("Unsupported * operator for values {}, {}",val1, val2), v:Val(Unit)})
     }
 }
 
 fn div(val1: &Value, val2: &Value) -> Result<Value, Error> {
     match (val1, val2) {
         (Value::Int(i1), Value::Int(i2)) => Result::Ok(Value::Int(i1 / i2)),
-        _ => Result::Err(Error{msg: format!("Unsupported / operator for values {}, {}",val1, val2)})
+        _ => Result::Err(Error{msg: format!("Unsupported / operator for values {}, {}",val1, val2), v:Val(Unit)})
     }
 }
 
 fn modulo(val1: &Value, val2: &Value) -> Result<Value, Error> {
     match (val1, val2) {
         (Value::Int(i1), Value::Int(i2)) => Result::Ok(Value::Int(i1 % i2)),
-        _ => Result::Err(Error{msg: format!("Unsupported % operator for values {}, {}",val1, val2)})
+        _ => Result::Err(Error{msg: format!("Unsupported % operator for values {}, {}",val1, val2), v:Val(Unit)})
     }
 }
 
 fn lt(val1: &Value, val2: &Value) -> Result<Value, Error> {
     match (val1, val2) {
         (Value::Int(i1), Value::Int(i2)) => Result::Ok(Value::Bool(i1 < i2)),
-        _ => Result::Err(Error{msg: format!("Unsupported < operator for values {}, {}",val1, val2)})
+        _ => Result::Err(Error{msg: format!("Unsupported < operator for values {}, {}",val1, val2), v:Val(Unit)})
     }
 }
 
 fn lte(val1: &Value, val2: &Value) -> Result<Value, Error> {
     match (val1, val2) {
         (Value::Int(i1), Value::Int(i2)) => Result::Ok(Value::Bool(i1 <= i2)),
-        _ => Result::Err(Error{msg: format!("Unsupported <= operator for values {}, {}",val1, val2)})
+        _ => Result::Err(Error{msg: format!("Unsupported <= operator for values {}, {}",val1, val2), v:Val(Unit)})
     }
 }
 
 fn gt(val1: &Value, val2: &Value) -> Result<Value, Error> {
     match (val1, val2) {
         (Value::Int(i1), Value::Int(i2)) => Result::Ok(Value::Bool(i1 > i2)),
-        _ => Result::Err(Error{msg: format!("Unsupported > operator for values {}, {}",val1, val2)})
+        _ => Result::Err(Error{msg: format!("Unsupported > operator for values {}, {}",val1, val2), v:Val(Unit)})
     }
 }
 
 fn gte(val1: &Value, val2: &Value) -> Result<Value, Error> {
     match (val1, val2) {
         (Value::Int(i1), Value::Int(i2)) => Result::Ok(Value::Bool(i1 >= i2)),
-        _ => Result::Err(Error{msg: format!("Unsupported >= operator for values {}, {}",val1, val2)})
+        _ => Result::Err(Error{msg: format!("Unsupported >= operator for values {}, {}",val1, val2), v:Val(Unit)})
     }
 }
 
@@ -355,7 +367,7 @@ fn eq(val1: &Value, val2: &Value) -> Result<Value, Error> {
     match (val1, val2) {
         (Value::Int(i1), Value::Int(i2)) => Result::Ok(Value::Bool(i1 == i2)),
         (Value::Bool(b1), Value::Bool(b2)) => Result::Ok(Value::Bool(b1 == b2)),
-        _ => Result::Err(Error{msg: format!("Unsupported == operator for values {}, {}",val1, val2)})
+        _ => Result::Err(Error{msg: format!("Unsupported == operator for values {}, {}",val1, val2), v:Val(Unit)})
     }
 }
 
@@ -363,20 +375,20 @@ fn neq(val1: &Value, val2: &Value) -> Result<Value, Error> {
     match (val1, val2) {
         (Value::Int(i1), Value::Int(i2)) => Result::Ok(Value::Bool(i1 != i2)),
         (Value::Bool(b1), Value::Bool(b2)) => Result::Ok(Value::Bool(b1 != b2)),
-        _ => Result::Err(Error{msg: format!("Unsupported != operator for values {}, {}",val1, val2)})
+        _ => Result::Err(Error{msg: format!("Unsupported != operator for values {}, {}",val1, val2), v:Val(Unit)})
     }
 }
 
 fn and(val1: &Value, val2: &Value) -> Result<Value, Error> {
     match (val1, val2) {
         (Value::Bool(b1), Value::Bool(b2)) => Result::Ok(Value::Bool(*b1 && *b2)),
-        _ => Result::Err(Error{msg: format!("Unsupported && operator for values {}, {}",val1, val2)})
+        _ => Result::Err(Error{msg: format!("Unsupported && operator for values {}, {}",val1, val2), v:Val(Unit)})
     }
 }
 
 fn or(val1: &Value, val2: &Value) -> Result<Value, Error> {
     match (val1, val2) {
         (Value::Bool(b1), Value::Bool(b2)) => Result::Ok(Value::Bool(*b1 || *b2)),
-        _ => Result::Err(Error{msg: format!("Unsupported || operator for values {}, {}",val1, val2)})
+        _ => Result::Err(Error{msg: format!("Unsupported || operator for values {}, {}",val1, val2), v:Val(Unit)})
     }
 }
