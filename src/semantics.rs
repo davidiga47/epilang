@@ -11,6 +11,34 @@ pub struct Error {
     pub v: V
 }
 
+pub fn list_convert(mut l: Vec<StackValue>) -> Vec<Exp> {
+    let mut nl=Vec::new();
+    loop{
+        match l.pop(){
+            Option::None => break,
+            Option::Some(sv) => match sv.as_ref(){
+                Value::Unit => nl.push(Exp::Const(Const::None)),
+                Value::Bool(b) => nl.push(Exp::Const(Const::Boolean(*b))),
+                Value::Int(i) => {
+                    let j: i32=*i as i32;
+                    nl.push(Exp::Const(Const::Integer(j)))
+                },
+                Value::Str(s) => nl.push(Exp::Const(Const::String(s.clone()))),
+                Value::List(ol) => nl.push(Exp::List(list_convert(ol.clone()))),
+                Value::Fn(f) => nl.push(Exp::Function(Vec::new(),f.body.clone()))
+            }
+        }
+    };
+    let mut res_stack=Vec::new();
+    loop {
+        match nl.pop(){
+            Option::None => break,
+            Option::Some(x) => res_stack.push(x) 
+        }
+    };
+    return res_stack;
+}
+
 pub fn eval(exp: &Exp) -> Result<V, Error> {
     let mut stack: Vec<StackValue> = Vec::new();
     eval_expression(exp, &mut stack, 0)
@@ -127,7 +155,7 @@ pub fn eval_expression(exp: &Exp, stack: &mut Vec<StackValue>, stack_start: usiz
                         Value::Bool(b) => Exp::Const(Const::Boolean(*b)),
                         Value::Fn(f) => Exp::Function(Vec::new(), f.body.clone()),
                         Value::Str(s) => Exp::Const(Const::String(s.to_string())),
-                        _ => Exp::Const(Const::None)//Exp::List(v.as_ref().unwrap())
+                        Value::List(l) => Exp::List(list_convert(l.clone()))
                     };
                     let tmp: Result<V, Error> = eval_expression(&Exp::Decl(exc.clone(),Box::new(val_exp),exp2.clone()),stack,stack_start);
                     match tmp {

@@ -15,7 +15,23 @@ pub fn tokenize(text: String) -> Result<Vec<Token>, LexicalError> {
     let mut callable = false;
 
     let mut chars = text.chars().peekable();
+
+    let mut tmp=Token::If;
+    let mut found=false;
+
     loop {
+        if !tokens.is_empty(){
+            tmp=tokens.pop().unwrap();
+            found=true;
+        };
+        match tokens.last(){
+            Option::Some(Token::Operator(Operator::Throw)) => callable=false,
+            _ => ()
+        };
+        if found {
+            found=false;
+            tokens.push(tmp.clone());
+        }
         match chars.next() {
             Option::None => break,
 

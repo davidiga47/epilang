@@ -150,6 +150,7 @@ pub fn parse_tokens(tokens: &mut Vec<Token>, function_stack: &mut Vec<FunctionSc
             },
             Token::Comma => {
                 loop {
+                    //println!("{}\n\n", *stack.last().unwrap()==Token::ListSelectionOpen);
                     match stack.last() {
                         Option::Some(
                             Token::SquareBracketOpen |
@@ -548,40 +549,23 @@ fn handle_operator_token(op: Operator, stack: &mut Vec<Token>, out: &mut Vec<Exp
     match op {
         Operator::Throw => {
             let tmp=tokens.pop().unwrap();      //we temporarily store the excpetion (or continuation) label
-            let mut tmp_stack=Vec::new();
             match tmp {
-                Token::SquareBracketOpen => {
-                    loop{
-                        match tokens.last(){
-                            Option::Some(Token::SquareBracketClosed) => {
-                                tmp_stack.push(tokens.pop().unwrap());
-                                break;
-                            },
-                            Option::Some(tkn) => tmp_stack.push(tokens.pop().unwrap()),
-                            Option::None => break
-                        };
-                    }
-                },
-                _ => ()
-            };
-            match tokens.last() {
-                Option::Some(
-                    Token::Operator(Operator::Seq) | 
-                    Token::RoundBracketClosed |
-                    Token::SquareBracketClosed |
-                    Token::CurlyBracketClosed
-                ) => stack.push(Token::Operator(Operator::Throw)),
-                Option::None => stack.push(Token::Operator(Operator::Throw)), 
-                //If there's another expression after the label this is a Throwcc expression. Otherwise it's a normal Throw
-                _ => stack.push(Token::Operator(Operator::Throwcc))
-            };
-            tokens.push(tmp);                   //we push again the label we temporarily popped
-            loop {
-                match tmp_stack.last(){
-                    Option::None => break,
-                    Option::Some(tkn) => tokens.push(tmp_stack.pop().unwrap())
+                Token::Operand(Operand::Var(_)) =>{
+                    match tokens.last() {
+                        Option::Some(
+                            Token::Operator(Operator::Seq) | 
+                            Token::RoundBracketClosed |
+                            Token::SquareBracketClosed |
+                            Token::CurlyBracketClosed
+                        ) => stack.push(Token::Operator(Operator::Throw)),
+                        Option::None => stack.push(Token::Operator(Operator::Throw)), 
+                        //If there's another expression after the label this is a Throwcc expression. Otherwise it's a normal Throw
+                        _ => stack.push(Token::Operator(Operator::Throwcc))
+                    };
                 }
+                _ => stack.push(Token::Operator(Operator::Throw))
             };
+            tokens.push(tmp);                  //we push again the label we temporarily popped
         },
         _ => stack.push(Token::Operator(op))
     }
