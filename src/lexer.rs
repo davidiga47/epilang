@@ -24,12 +24,12 @@ pub fn tokenize(text: String) -> Result<Vec<Token>, LexicalError> {
             tmp=tokens.pop().unwrap();
             found=true;
         };
-        match tokens.last(){
-            Option::Some(Token::Operator(Operator::Throw)) => callable=false,
-            _ => ()
-        };
         if found {
             found=false;
+            match tokens.last(){
+                Option::Some(Token::Operator(Operator::Throw)) => callable=false,
+                _ => ()
+            };
             tokens.push(tmp.clone());
         }
         match chars.next() {
