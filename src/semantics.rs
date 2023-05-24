@@ -49,7 +49,7 @@ pub fn eval_expression(exp: &Exp, stack: &mut Vec<StackValue>, stack_start: usiz
         Exp::Const(c) => Result::Ok(V::Val(Value::from_const(&c))),
 
         Exp::Var(x) => {
-            Result::Ok(V::Ptr(stack[x.scope + stack_start]))
+            Result::Ok(V::Ptr(stack[0 + stack_start]))
         },
 
         Exp::Decl(_, val_exp, exp2) => {
