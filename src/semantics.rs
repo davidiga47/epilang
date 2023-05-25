@@ -49,7 +49,7 @@ pub fn eval_expression(exp: &Exp, stack: &mut Vec<StackValue>, stack_start: usiz
         Exp::Const(c) => Result::Ok(V::Val(Value::from_const(&c))),
 
         Exp::Var(x) => {
-            Result::Ok(V::Ptr(stack[0 + stack_start]))
+            Result::Ok(V::Ptr(stack[x.scope + stack_start]))
         },
 
         Exp::Decl(_, val_exp, exp2) => {
@@ -178,7 +178,7 @@ pub fn eval_expression(exp: &Exp, stack: &mut Vec<StackValue>, stack_start: usiz
         //E.g. throw k 2 => this is used to evaluate a block of the type `callcc k in e`
         Exp::Throwcc(k,e) => {
             let res=eval_expression(e,stack,stack_start)?;
-            return Result::Err(Error{msg: String::from(&res.to_string()), v:res})
+            return Result::Err(Error{msg: String::from(k.name.to_string()), v:res})
         },
 
         //calls the current continuation as k and then evaluates the expression e. 
@@ -189,7 +189,8 @@ pub fn eval_expression(exp: &Exp, stack: &mut Vec<StackValue>, stack_start: usiz
                 Result::Ok(_) => return Result::Ok(res?),
                 Result::Err(Error{msg, v}) => {
                     if (msg.len()>18 && msg.substring(0,18).eq(&"uncaught exception".to_string())) { return Result::Err(Error{msg: msg, v: v})};
-                    return Result::Ok(v)
+                    if (msg.eq(&k.name.to_string())) {return Result::Ok(v)};
+                    return eval_expression(e,stack,stack_start)
                 }
                 
             }

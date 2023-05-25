@@ -150,7 +150,6 @@ pub fn parse_tokens(tokens: &mut Vec<Token>, function_stack: &mut Vec<FunctionSc
             },
             Token::Comma => {
                 loop {
-                    //println!("{}\n\n", *stack.last().unwrap()==Token::ListSelectionOpen);
                     match stack.last() {
                         Option::Some(
                             Token::SquareBracketOpen |
@@ -174,7 +173,7 @@ pub fn parse_tokens(tokens: &mut Vec<Token>, function_stack: &mut Vec<FunctionSc
                 let function_scope=function_stack.last_mut().unwrap();
                 match tokens.last() {
                     Option::Some(Token::Operand(Operand::Var(name))) => {
-                        function_scope.variable_map.insert(name.clone(), function_scope.var_scope);
+                        function_scope.variable_map.insert(name.clone(), function_scope.var_scope-1);
                     },
                     _ =>return Result::Err(SyntaxError{msg: String::from("Expected variable name after callcc token")})
                 };
@@ -251,7 +250,7 @@ fn handle_let_token(
     Result::Ok(())
 }
 
-fn handle_square_bracket_closed_token(stack: &mut Vec<Token>, out: &mut Vec<Exp>, empty: bool,) -> Result<(), SyntaxError> {
+fn handle_square_bracket_closed_token(stack: &mut Vec<Token>, out: &mut Vec<Exp>, empty: bool) -> Result<(), SyntaxError> {
     let is_selection: bool;
     let mut len: usize = if empty { 0 } else { 1 };
 
@@ -722,7 +721,10 @@ fn push_operator_to_out(op: &Operator, out: &mut Vec<Exp>) -> Result<(), SyntaxE
             if out.len() < 2 { return Result::Err(SyntaxError{msg: format!("Unexpected operator {}", op)}) }
             let e = out.pop().unwrap();
             let k = out.pop().unwrap();
-            out.push(Exp::Throwcc(Box::new(k),Box::new(e)))            
+            match k {
+                Exp::Var(v) => out.push(Exp::Throwcc(v,Box::new(e))),
+                _ => return Result::Err(SyntaxError{msg: format!("Expected var after callcc token")})   
+            }    
         }
     }
     Result::Ok(())

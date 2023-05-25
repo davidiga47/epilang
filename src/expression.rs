@@ -59,7 +59,7 @@ pub enum Exp {
     //Eg: throw "DivZeroException"
     Throw(Box<Exp>),
     //Eg: throw k 5
-    Throwcc(Box<Exp>, Box<Exp>),
+    Throwcc(Var, Box<Exp>),
     //Eg: callcc k in e
     Callcc(Var,Box<Exp>)
 }

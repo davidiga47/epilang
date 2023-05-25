@@ -1,8 +1,8 @@
+let x=0;
 callcc k in {
-    try {
-        throw 3
-    } catch x {
-        throw k x
-    }
+    callcc j in {
+        if (x == 0) {throw j "DivZero"};
+        throw k (5 / x)
+    };
+    x-42
 }
-
