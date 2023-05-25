@@ -132,7 +132,23 @@ pub fn parse_tokens(tokens: &mut Vec<Token>, function_stack: &mut Vec<FunctionSc
                 stack.push(Token::Fn)
             },
 
-            Token::CurlyBracketOpen => stack.push(Token::CurlyBracketOpen),
+            Token::CurlyBracketOpen => {
+                match stack.last(){
+                    Option::Some(Token::In) => {
+                        tokens.push(Token::Operator(Operator::Seq));
+                        tokens.push(Token::Operand(Operand::Null));
+                        tokens.push(Token::Operator(Operator::Assign));
+                        let cont=match out.last(){
+                            Option::Some(Exp::Var(v)) => &v.name,
+                            _ => return Result::Err(SyntaxError{msg: String::from("Unknown error")})
+                        };
+                        tokens.push(Token::Operand(Operand::Var(cont.clone())));
+                        tokens.push(Token::Let);
+                    },
+                    _ => ()
+                };
+                stack.push(Token::CurlyBracketOpen)
+            },
 
             Token::CurlyBracketClosed => {
                 // Closing curly brackets can decrement scope
@@ -141,10 +157,11 @@ pub fn parse_tokens(tokens: &mut Vec<Token>, function_stack: &mut Vec<FunctionSc
                 // This makes the syntax more similar to Java, C++ etc
                 match tokens.last() {
                     Option::Some(Token::Operator(Operator::Seq)) => (),
+                    Option::Some(Token::Catch) => (),
                     Option::Some(Token::Else) => (),
                     Option::Some(Token::CurlyBracketClosed) => (),
                     Option::None => (),
-                    _ => ()
+                    _ => tokens.push(Token::Operator(Operator::Seq))
                 }
 
             },
@@ -173,7 +190,7 @@ pub fn parse_tokens(tokens: &mut Vec<Token>, function_stack: &mut Vec<FunctionSc
                 let function_scope=function_stack.last_mut().unwrap();
                 match tokens.last() {
                     Option::Some(Token::Operand(Operand::Var(name))) => {
-                        function_scope.variable_map.insert(name.clone(), function_scope.var_scope-1);
+                        function_scope.variable_map.insert(name.clone(), function_scope.var_scope);
                     },
                     _ =>return Result::Err(SyntaxError{msg: String::from("Expected variable name after callcc token")})
                 };
@@ -313,6 +330,7 @@ fn handle_square_bracket_closed_token(stack: &mut Vec<Token>, out: &mut Vec<Exp>
  * a Let token. The new scope value is returned.
  */
 fn handle_curly_bracket_closed_token(stack: &mut Vec<Token>, out: &mut Vec<Exp>, function_stack: &mut Vec<FunctionScope>) -> Result<(), SyntaxError> {
+    
     loop {
         match stack.pop() {
             Option::Some(Token::CurlyBracketOpen) => break,
@@ -426,6 +444,7 @@ fn handle_curly_bracket_closed_token(stack: &mut Vec<Token>, out: &mut Vec<Exp>,
             out.push(Exp::Function(args, Box::new(body)))
         },
         Option::Some(Token::In) => {
+            //function_stack.last_mut().unwrap().var_scope -= 1;
             stack.pop();
             match stack.last() {
                 Option::Some(Token::Callcc) => {

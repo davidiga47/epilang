@@ -1,35 +1,88 @@
-epilang> try {3} catch (3) {42}
+
+//NON PIÙ UN PROBLEMA
+epilang> let n=3
+epilang> let f=fn(x){3}
+epilang> f
 3
-epilang> try {throw 3} catch (3) {42}
+epilang> f
+3
+epilang> f(n)
+Error: Expression is not callable
+epilang> let n=3;
+epilang> let f=fn(x){3}
+epilang> f
+unit
+epilang> f(n)
+Error: Expression is not callable
+
+
+
+
+/----------------------------------------------------/
+
+
+
+
+epilang> let x=5
+epilang> let y=0
+epilang> try {if (y == 0) {throw "DivZero"} else {x / y}} catch DivZero {x}
+5
+epilang> try {if (y == 0) {throw "DivZero"} else {x / y}}
+ERROR: uncaught exception DivZero
+
+
+//NON PIÙ UN PROBLEMA
+epilang> try {throw 3 ; 4}
+Syntax error: Can not parse a single expression. Probabily missing a ;
+epilang> throw 3 ; 4
+ERROR: uncaught exception 3
+epilang> {throw 3}
+ERROR: uncaught exception 3
+epilang> {throw 3 ; 4}
+Syntax error: Can not parse a single expression. Probabily missing a ;
+epilang> {throw 3 ; 4}
+Syntax error: Can not parse a single expression. Probabily missing a ;
+epilang> {(throw 3) ; 4}
+4
+epilang> (throw 3) ; 4
+4
+epilang> (throw 3) ; 4		QUESTO ERA UN PROBLEMA CON LE PARENTESI
+
+#####################################
+
+
+epilang> try {3} catch x {42}
+3
+epilang> try {throw 3} catch x {42}
 42
-epilang> try {throw 4} catch (3) {42}
-Error: uncaught exception 4
 epilang> {try {3}}
 3
-epilang> {try {3} catch (3) {42}}
+epilang> {try {3} catch x {42}}
 3
-epilang> {try {throw 3} catch (3) {42}}
+epilang> {try {throw 3} catch x {42}}
 42
-epilang> callcc x in {{try {throw 3} catch (3) {42}}}
+epilang> callcc x in {{try {throw 3} catch e {42}}}
 42
-epilang> callcc x in {try {4} catch (4) {42}}
+epilang> callcc x in {try {4} catch e {42}}
 4
-epilang> callcc x in {try {throw 4} catch (4) {throw x 42}}
+epilang> callcc x in {try {throw 4} catch e {throw x 42}}
 42
-epilang> callcc x in {try {throw 4} catch (4) {throw x 42}} ; 76
+epilang> callcc x in {try {throw 4} catch e {throw x 42}} ; 76
 76
-epilang> callcc x in {try {throw 4} catch (4) {throw x 42}} ; x+1
+epilang> callcc x in {try {throw 4} catch e {throw x 42}} ; x+1
 thread 'main' panicked at 'index out of bounds: the len is 0 but the index is 0', src/semantics.rs:20:31
 note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
-(base) [shaggy@computer-2 epilang]$ ./target/release/epilang 
-epilang> let x=callcc k in {try {throw 4} catch (4) {throw x 42}} ; x+2
-SyntaxError: Unknown variable x
+epilang> let x=callcc k in {try {throw 4} catch e {throw k 42}} ; x+2
+SyntaxError: Unknown variable x (QUESTO PERCHÈ È BUGGATA LA SHELL)
 epilang> let x=3 ; x+1
-SyntaxError: Unknown variable x
+SyntaxError: Unknown variable x (E INFATTI...)
 epilang> let x = 3 ; x+1
 SyntaxError: Unknown variable x
 epilang> let x = 3 ; 2
 epilang> let x = 3 ; 2
+epilang> x
+2
+
 
 
 callcc x in {
@@ -39,14 +92,15 @@ callcc x in {
         throw y 1
     };
     a    
-}
+}       //QUESTO CONTINUA A ESSERE UN PROBLEMA MA È CORE
+        //VEDI SOTTO
 
-callcc x in {let a=2 ; callcc y in {let a=3 ; a} ; a} QUESTO DÀ ERRORE E NON DOVREBBE
+
 
 {
     let a = 2; 
     {
-        let a = 3;
+        let a = 3;  
     };
     a 
 }
@@ -58,3 +112,117 @@ a_1
 thread 'main' panicked at 'index out of bounds: the len is 1 but the index is 1', src/semantics.rs:20:31
 note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
 
+
+BACKUP DI SICUREZZA DELLE CANCELLAZIONI DELL'ULTIMO MINUTO
+
+parser.rs (righe 147-152)
+{
+    match stack.last(){
+        Option::Some(Token::In) => tokens.push(Token::Operator(Operator::Seq)),
+        _ => ()
+    }
+}
+
+match op {
+        Operator::Throw => {
+            let tmp=tokens.pop().unwrap();      //we temporarily store the excpetion (or continuation) label
+            /*let mut tmp_stack=Vec::new();
+            let mut square_count=0;*/
+            match tmp {
+                /*Token::SquareBracketOpen => {
+                    square_count+=1;
+                    loop{
+                        match tokens.last(){
+                            Option::Some(Token::SquareBracketClosed) => {
+                                tmp_stack.push(tokens.pop().unwrap());
+                                square_count-=1;
+                                if square_count == 0 {break};
+                            },
+                            Option::Some(Token::SquareBracketOpen) => {
+                                tmp_stack.push(tokens.pop().unwrap());
+                                square_count+=1;
+                            }
+                            Option::Some(tkn) => tmp_stack.push(tokens.pop().unwrap()),
+                            Option::None => break
+                        };
+                    }
+                },*/
+                Token::Operand(Operand::Var(_)) =>{
+                    match tokens.last() {
+                        /*Option::Some(Token::SquareBracketOpen) => {
+                            tmp_stack.push(tokens.pop().unwrap());
+                            square_count+=1;
+                            loop{
+                                match tokens.last(){
+                                    Option::Some(Token::SquareBracketClosed) => {
+                                        tmp_stack.push(tokens.pop().unwrap());
+                                        square_count-=1;
+                                        if square_count == 0 {break};
+                                    },
+                                    Option::Some(Token::SquareBracketOpen) => {
+                                        tmp_stack.push(tokens.pop().unwrap());
+                                        square_count+=1;
+                                    }
+                                    Option::Some(tkn) => tmp_stack.push(tokens.pop().unwrap()),
+                                    Option::None => break
+                                };
+                            }
+                        },*/
+                        Option::Some(
+                            Token::Operator(Operator::Seq) | 
+                            Token::RoundBracketClosed |
+                            Token::SquareBracketClosed |
+                            Token::CurlyBracketClosed
+                        ) => stack.push(Token::Operator(Operator::Throw)),
+                        Option::None => stack.push(Token::Operator(Operator::Throw)), 
+                        //If there's another expression after the label this is a Throwcc expression. Otherwise it's a normal Throw
+                        _ => stack.push(Token::Operator(Operator::Throwcc))
+                    };
+                }
+                _ => stack.push(Token::Operator(Operator::Throw))
+            };
+            /*match tokens.last() {
+                Option::Some(
+                    Token::Operator(Operator::Seq) | 
+                    Token::RoundBracketClosed |
+                    Token::SquareBracketClosed |
+                    Token::CurlyBracketClosed
+                ) => stack.push(Token::Operator(Operator::Throw)),
+                Option::None => stack.push(Token::Operator(Operator::Throw)), 
+                //If there's another expression after the label this is a Throwcc expression. Otherwise it's a normal Throw
+                _ => stack.push(Token::Operator(Operator::Throwcc))
+            };
+            loop {
+                match tmp_stack.last(){
+                    Option::None => break,
+                    Option::Some(tkn) => tokens.push(tmp_stack.pop().unwrap())
+                }
+            };*/
+            tokens.push(tmp);                  //we push again the label we temporarily popped
+        },
+        _ => stack.push(Token::Operator(op))
+    }
+
+/---------------------------------------------------/
+
+callcc x in {let a=2 ; callcc y in {let a=3 ; a} ; a} QUESTO DÀ ERRORE 
+                                                      VEDI SOPRA
+
+
+
+
+let a=2;
+callcc k in {
+    let a=15;
+    throw k a
+};
+a       //STESSO PROBLEMA DI SOPRA
+
+
+let a_0 = 2;
+callcc k_1 in let a_1 = 15;
+throw k_1 a_1;
+a_1
+########
+thread 'main' panicked at 'index out of bounds: the len is 1 but the index is 1', src/semantics.rs:52:31
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace

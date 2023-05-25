@@ -11,6 +11,13 @@ pub struct Error {
     pub v: V
 }
 
+fn exp_to_string(exp: &Exp) -> String {
+    match exp {
+        Exp::Var(x) => format!("{}", x.name),
+        _ => "".to_string()
+    }
+}
+
 pub fn list_convert(mut l: Vec<StackValue>) -> Vec<Exp> {
     let mut nl=Vec::new();
     loop{
@@ -41,10 +48,10 @@ pub fn list_convert(mut l: Vec<StackValue>) -> Vec<Exp> {
 
 pub fn eval(exp: &Exp) -> Result<V, Error> {
     let mut stack: Vec<StackValue> = Vec::new();
-    eval_expression(exp, &mut stack, 0)
+    eval_expression(exp, &mut stack, 0, false, "".to_string())
 }
 
-pub fn eval_expression(exp: &Exp, stack: &mut Vec<StackValue>, stack_start: usize) -> Result<V, Error> {
+pub fn eval_expression(exp: &Exp, stack: &mut Vec<StackValue>, stack_start: usize, in_call: bool, param: String) -> Result<V, Error> {
     match exp {
         Exp::Const(c) => Result::Ok(V::Val(Value::from_const(&c))),
 
@@ -53,11 +60,11 @@ pub fn eval_expression(exp: &Exp, stack: &mut Vec<StackValue>, stack_start: usiz
         },
 
         Exp::Decl(_, val_exp, exp2) => {
-            match eval_expression(val_exp, stack, stack_start)? {
+            match eval_expression(val_exp, stack, stack_start, false, "".to_string())? {
                 V::Ptr(ptr) => stack.push(ptr),
                 V::Val(value) => stack.push(StackValue::from_box(Box::new(value)))
             };
-            let result = eval_expression(exp2, stack, stack_start);
+            let result = eval_expression(exp2, stack, stack_start, false, "".to_string());
             stack.pop();
             result
         },
@@ -65,7 +72,7 @@ pub fn eval_expression(exp: &Exp, stack: &mut Vec<StackValue>, stack_start: usiz
         Exp::List(list) => {
             let mut values: Vec<StackValue> = Vec::with_capacity(list.len());
             for exp in list {
-                let value = match eval_expression(exp, stack, stack_start)? {
+                let value = match eval_expression(exp, stack, stack_start, false, "".to_string())? {
                     V::Ptr(ptr) => ptr,
                     V::Val(value) => StackValue::from_box(Box::new(value))
                 };
@@ -75,8 +82,8 @@ pub fn eval_expression(exp: &Exp, stack: &mut Vec<StackValue>, stack_start: usiz
         }
 
         Exp::ListSelection(list, index) => {
-            let list: V = eval_expression(list, stack, stack_start)?;
-            let index: V = eval_expression(index, stack, stack_start)?;
+            let list: V = eval_expression(list, stack, stack_start, false, "".to_string())?;
+            let index: V = eval_expression(index, stack, stack_start, false, "".to_string())?;
             let value = match (list.as_ref(), index.as_ref()) {
                 (Value::List(values), Value::Int(i)) => values.get(*i as usize)
                     .ok_or(Error{msg: String::from("List index out of range"), v:Val(Unit)})?,
@@ -86,19 +93,19 @@ pub fn eval_expression(exp: &Exp, stack: &mut Vec<StackValue>, stack_start: usiz
         }
 
         Exp::Assign(left_exp, right_exp) => {
-            let right_value: V = eval_expression(right_exp, stack, stack_start)?;
+            let right_value: V = eval_expression(right_exp, stack, stack_start, false, "".to_string())?;
             match (*left_exp).as_ref() {
                 Exp::Var(var) => match right_value {
                     V::Ptr(ptr) => stack[var.scope + stack_start] = ptr,
                     V::Val(value) => stack[var.scope + stack_start] = StackValue::from_box(Box::new(value))
                 },
                 Exp::ListSelection(list, index) => {
-                    let mut list = eval_expression(list.as_ref(), stack, stack_start)?;
+                    let mut list = eval_expression(list.as_ref(), stack, stack_start, false, "".to_string())?;
                     let list: &mut Vec<StackValue> = match list.as_mut_ref() {
                         Value::List(list) => list,
                         _ => return Result::Err(Error{msg: String::from("Expected list value before list selection"), v:Val(Unit)})
                     };
-                    let index: usize = match eval_expression(index.as_ref(), stack, stack_start)?.as_ref() {
+                    let index: usize = match eval_expression(index.as_ref(), stack, stack_start, false, "".to_string())?.as_ref() {
                         Value::Int(i) => *i as usize,
                         _ => return Result::Err(Error{msg: String::from("Expected number in list selection"), v:Val(Unit)})
                     };
@@ -116,13 +123,13 @@ pub fn eval_expression(exp: &Exp, stack: &mut Vec<StackValue>, stack_start: usiz
         }
 
         Exp::While(guard, exp) => {
-            let condition = eval_expression(guard, stack, stack_start)?.as_bool();
+            let condition = eval_expression(guard, stack, stack_start, false, "".to_string())?.as_bool();
             if !condition {
                 Result::Ok(V::Val(Value::Unit))
             } else {
                 loop {
-                    let v: V = eval_expression(exp, stack, stack_start)?;
-                    if !eval_expression(guard, stack, stack_start)?.as_bool() {
+                    let v: V = eval_expression(exp, stack, stack_start, false, "".to_string())?;
+                    if !eval_expression(guard, stack, stack_start, false, "".to_string())?.as_bool() {
                         break Result::Ok(v)
                     }
                 }
@@ -130,12 +137,12 @@ pub fn eval_expression(exp: &Exp, stack: &mut Vec<StackValue>, stack_start: usiz
         }
 
         Exp::IfThenElse(condition, exp1, exp2) => {
-            let is_true: bool = eval_expression(condition, stack, stack_start)?.as_bool();
-            eval_expression(if is_true {exp1} else {exp2}, stack, stack_start)
+            let is_true: bool = eval_expression(condition, stack, stack_start, false, "".to_string())?.as_bool();
+            eval_expression(if is_true {exp1} else {exp2}, stack, stack_start, false, "".to_string())
         }
 
         Exp::Try(exp1)=> {
-            let res: Result<V, Error> = eval_expression(exp1,stack,stack_start);
+            let res: Result<V, Error> = eval_expression(exp1,stack,stack_start, false, "".to_string());
             match res {
                 Result::Ok(_) => return Result::Ok(res?),
                 Result::Err(Error{msg, v}) => {
@@ -145,7 +152,7 @@ pub fn eval_expression(exp: &Exp, stack: &mut Vec<StackValue>, stack_start: usiz
         }
         
         Exp::TryCatch(exp1,exc,exp2) => {
-            let res: Result<V, Error> = eval_expression(exp1,stack,stack_start);
+            let res: Result<V, Error> = eval_expression(exp1,stack,stack_start, false, "".to_string());
             match res {
                 Result::Ok(_) => return Result::Ok(res?),
                 Result::Err(Error{msg, v}) => {
@@ -157,7 +164,7 @@ pub fn eval_expression(exp: &Exp, stack: &mut Vec<StackValue>, stack_start: usiz
                         Value::Str(s) => Exp::Const(Const::String(s.to_string())),
                         Value::List(l) => Exp::List(list_convert(l.clone()))
                     };
-                    let tmp: Result<V, Error> = eval_expression(&Exp::Decl(exc.clone(),Box::new(val_exp),exp2.clone()),stack,stack_start);
+                    let tmp: Result<V, Error> = eval_expression(&Exp::Decl(exc.clone(),Box::new(val_exp),exp2.clone()),stack,stack_start, false, "".to_string());
                     match tmp {
                         Result::Ok(v) => {
                             return Result::Ok(v)
@@ -171,26 +178,27 @@ pub fn eval_expression(exp: &Exp, stack: &mut Vec<StackValue>, stack_start: usiz
 
         //evaluate the exception then returns the string containing the value. Try-Catch, if present, will handle the exception thrown
         Exp::Throw(exp) => {
-            let res=eval_expression(exp,stack,stack_start)?;
+            let res=eval_expression(exp,stack,stack_start, false, "".to_string())?;
             return Result::Err(Error{msg: String::from("uncaught exception ".to_string()+&res.to_string()), v:res})
         },
 
         //E.g. throw k 2 => this is used to evaluate a block of the type `callcc k in e`
         Exp::Throwcc(k,e) => {
-            let res=eval_expression(e,stack,stack_start)?;
+            let res=eval_expression(e,stack,stack_start, false, "".to_string())?;
+            if in_call {return Result::Err(Error{msg: String::from(param), v:res})};
             return Result::Err(Error{msg: String::from(k.name.to_string()), v:res})
         },
 
         //calls the current continuation as k and then evaluates the expression e. 
         //If k is thrown inside e with `throw k m`, then `callcc k in e` evaluates to m
         Exp::Callcc(k,e) => {
-            let res: Result<V, Error> = eval_expression(e,stack,stack_start);
+            let res: Result<V, Error> = eval_expression(e,stack,stack_start, false, "".to_string());
             match res {
                 Result::Ok(_) => return Result::Ok(res?),
                 Result::Err(Error{msg, v}) => {
                     if (msg.len()>18 && msg.substring(0,18).eq(&"uncaught exception".to_string())) { return Result::Err(Error{msg: msg, v: v})};
                     if (msg.eq(&k.name.to_string())) {return Result::Ok(v)};
-                    return eval_expression(e,stack,stack_start)
+                    return eval_expression(e,stack,stack_start, false, "".to_string())
                 }
                 
             }
@@ -201,19 +209,19 @@ pub fn eval_expression(exp: &Exp, stack: &mut Vec<StackValue>, stack_start: usiz
         },
 
         Exp::FunctionCall(callable, args) => {
-            match eval_expression(callable, stack, stack_start)?.as_ref() {
+            match eval_expression(callable, stack, stack_start, false, "".to_string())?.as_ref() {
                 Value::Fn(function) => {
                     if args.len() != function.num_args {
                         return Result::Err(Error { msg: format!("Wrong number of arguments. Expected {}, found {}", function.num_args, args.len()), v:Val(Unit) })
                     }
                     let function_stack_start: usize = stack.len();
                     for arg in args {
-                        match eval_expression(arg, stack, stack_start)? {
+                        match eval_expression(arg, stack, stack_start, false, "".to_string())? {
                             V::Ptr(ptr) => stack.push(ptr),
                             V::Val(value) => stack.push(StackValue::from_box(Box::new(value)))
                         };
                     };
-                    let result: V = eval_expression(function.body.as_ref(), stack, function_stack_start)?;
+                    let result: V = eval_expression(function.body.as_ref(), stack, function_stack_start, true, exp_to_string(&args[0]))?;
                     for _ in 0..function.num_args {
                         stack.pop();
                     }
@@ -224,8 +232,8 @@ pub fn eval_expression(exp: &Exp, stack: &mut Vec<StackValue>, stack_start: usiz
         },
 
         Exp::Seq(exp1, exp2) => {
-            eval_expression(exp1, stack, stack_start)?;
-            eval_expression(exp2, stack, stack_start)
+            eval_expression(exp1, stack, stack_start, false, "".to_string())?;
+            eval_expression(exp2, stack, stack_start, false, "".to_string())
         },
 
         Exp::Sum(exp1, exp2) => {
@@ -284,37 +292,37 @@ pub fn eval_expression(exp: &Exp, stack: &mut Vec<StackValue>, stack_start: usiz
         },
 
         Exp::And(exp1, exp2) => {
-            let val_exp1 = eval_expression(exp1, stack, stack_start)?;
+            let val_exp1 = eval_expression(exp1, stack, stack_start, false, "".to_string())?;
             if (!val_exp1.as_bool()) {
                 Result::Ok(V::Val(Value::Bool(false)))
             }
             else {
-                let val_exp2 = eval_expression(exp2, stack, stack_start)?;
+                let val_exp2 = eval_expression(exp2, stack, stack_start, false, "".to_string())?;
                 Result::Ok(V::Val(Value::Bool(val_exp2.as_bool())))
             }
         },
 
         Exp::Or(exp1, exp2) => {
-            let val_exp1 = eval_expression(exp1, stack, stack_start)?;
+            let val_exp1 = eval_expression(exp1, stack, stack_start, false, "".to_string())?;
             if (val_exp1.as_bool()) {
                 Result::Ok(V::Val(Value::Bool(true)))
             }
             else {
-                let val_exp2 = eval_expression(exp2, stack, stack_start)?;
+                let val_exp2 = eval_expression(exp2, stack, stack_start, false, "".to_string())?;
                 Result::Ok(V::Val(Value::Bool(val_exp2.as_bool())))
             }
         },
 
         Exp::Not(exp1) => {
-            let v = eval_expression(exp1, stack, stack_start)?;
+            let v = eval_expression(exp1, stack, stack_start, false, "".to_string())?;
             Result::Ok(V::Val(Value::Bool(!v.as_bool())))
         }
     }
 }
 
 fn double_eval(exp1: &Exp, exp2: &Exp, stack: &mut Vec<StackValue>, stack_start: usize) -> Result<(V, V), Error> {
-    let v1 = eval_expression(exp1, stack, stack_start)?;
-    let v2 = eval_expression(exp2, stack, stack_start)?;
+    let v1 = eval_expression(exp1, stack, stack_start, false, "".to_string())?;
+    let v2 = eval_expression(exp2, stack, stack_start, false, "".to_string())?;
     Result::Ok((v1, v2))
 }
 

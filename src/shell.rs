@@ -92,7 +92,7 @@ fn handle_user_input(
         }
     };
     // Evaluate expression
-    match eval_expression(&exp, stack, 0) {
+    match eval_expression(&exp, stack, 0, false, "".to_string()) {
         Result::Ok(V::Ptr(ptr)) => if ptr.is_unit() {} else {println!("{}", ptr.as_ref())},
         Result::Ok(V::Val(value)) => {
             println!("{}", value);
@@ -131,7 +131,7 @@ fn eval_let(
         Result::Ok(exp) => exp,
         Result::Err(err) => return Result::Err(String::from(format!("SyntaxError: {}", err.msg)))
     };
-    let val = match eval_expression(&exp, stack, 0) {
+    let val = match eval_expression(&exp, stack, 0, false, "".to_string()) {
         Result::Ok(val) => val,
         Result::Err(err) => return Result::Err(err.msg)
     };
